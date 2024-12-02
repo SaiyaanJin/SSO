@@ -300,18 +300,7 @@ export default function App() {
 						desc="Intraday Forecast portal of ERLDC"
 					/>
 					</div> */}
-					{/* <AppCard
-						imageName="dr.jpeg"
-						linkTo="http://10.3.101.180:8181/"
-						title="D.R Assessment"
-						desc="Dynamic Reactive Assessment"
-					/>
-					<AppCard
-						imageName="grafana.jpg"
-						linkTo="http://10.3.200.95:3333/"
-						title="Intraday Forecast"
-						desc="Intraday Forecast portal of ERLDC"
-					/> */}
+					
 					<div className="field"> </div>
 				</div>
 			</div>
