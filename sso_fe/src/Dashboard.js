@@ -90,9 +90,11 @@ export default function App() {
 						backgroundColor: "aliceblue",
 						margin: "5px",
 						borderRadius: "25px",
+						fontSize: "small"
 					}}
 				>
 					<Button
+						size="small"
 						label="ERLDC DISCUSSIONS"
 						severity="secondary"
 						icon="pi pi-users"
@@ -179,6 +181,15 @@ export default function App() {
 						text
 						onClick={() => {
 							window.open("https://logbook.erldc.in/login", "_blank");
+						}}
+					/>
+					<Button
+						label="Technical Paper Guideline"
+						icon="pi pi-file-excel"
+						severity="help"
+						text
+						onClick={() => {
+							window.open("https://docs.google.com/spreadsheets/d/1MQX-RcXbJRK024lQySHTws9UmyhC5LsIMWigqubtxYg/edit?usp=sharing", "_blank");
 						}}
 					/>
 				</div>
