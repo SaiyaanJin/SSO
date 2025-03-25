@@ -295,7 +295,7 @@ export default function App() {
 
 				<br />
 
-				<div className="flex flex-wrap gap-1 justify-content-between align-items-center" style={{marginLeft:"-72.5%"}}>
+				<div className="flex flex-wrap gap-1 justify-content-between align-items-center" style={{marginLeft:"-48.5%"}}>
 					<div className="field"> </div>
 					<AppCard
 						imageName="grafana.jpg"
@@ -303,14 +303,14 @@ export default function App() {
 						title="Intraday Forecast"
 						desc="Intraday Forecast portal of ERLDC"
 					/>
-					{/* <div style={{marginLeft:"-32.5%"}}>
+					<div style={{marginLeft:"-32.5%"}}>
 					<AppCard
-						imageName="grafana.jpg"
-						linkTo="http://10.3.200.95:3333/"
-						title="Intraday Forecast"
-						desc="Intraday Forecast portal of ERLDC"
+						imageName="Resource.jpeg"
+						linkTo="http://10.3.200.153:4200/"
+						title="Resource Adequacy Portal"
+						desc="Forecast data from constituents"
 					/>
-					</div> */}
+					</div>
 					
 					<div className="field"> </div>
 				</div>

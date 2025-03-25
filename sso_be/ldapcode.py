@@ -25,7 +25,7 @@ def emp_data():
 
     if user_details == "Sanju8@92":
 
-        l = ldap.initialize("ldap://10.3.100.120")
+        l = ldap.initialize("ldap://10.3.110.120")
 
         l.protocol_version = ldap.VERSION3
 
@@ -160,7 +160,7 @@ def token():
 
     pswd = login_token_decoded['password']
 
-    l = ldap.initialize("ldap://10.3.100.120")
+    l = ldap.initialize("ldap://10.3.110.120")
 
     l.protocol_version = ldap.VERSION3
 

@@ -1,6 +1,6 @@
 import ldap
 
-l = ldap.initialize("ldap://10.3.100.120")
+l = ldap.initialize("ldap://10.3.110.120")
 
 l.protocol_version = ldap.VERSION3
 
