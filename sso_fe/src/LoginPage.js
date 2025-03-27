@@ -1,17 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Password } from "primereact/password";
-import { InputText } from "primereact/inputtext";
-import { Card } from "primereact/card";
-import { Button } from "primereact/button";
+import { Form, Button, Container, Row, Col, Card } from "react-bootstrap";
 import axios from "axios";
-import "./cssFiles/PasswordDemo.css";
-import "./cssFiles/ButtonDemo.css";
+// import { jwtDecode as jwt_decode } from "jwt-decode";
 import jwt_decode from "jwt-decode";
 import { useNavigate } from "react-router-dom";
-// import Grid from "@material-ui/core/Grid";
-import { Container, Row, Col } from "react-bootstrap";
 import GILogo from "./staticFiles/GILogo.png";
-// import { PrimeReactProvider, PrimeReactContext } from "primereact/api";
+import "bootstrap/dist/css/bootstrap.min.css";
 import "primereact/resources/themes/lara-light-cyan/theme.css";
 import "primeflex/primeflex.css";
 import "primereact/resources/themes/lara-light-indigo/theme.css"; //theme
@@ -51,17 +45,8 @@ function LoginApp() {
 	}, []);
 
 	const onClickLogin = () => {
-		// const uploadData = new FormData();
-		// uploadData.append("username", user);
-		// uploadData.append("password", password);
-
 		const sign = require("jwt-encode");
-		const jwt = sign(
-			// "{ username: " + user + ", password: " + password + " }",
-			{ username: user, password: password },
-
-			"frontendss0@posoco"
-		);
+		const jwt = sign({ username: user, password: password }, "frontendss0@posoco");
 
 		axios
 			.post("https://sso.erldc.in:5000/token", {
@@ -83,88 +68,51 @@ function LoginApp() {
 	};
 
 	return (
-		<Container>
-			<Row>
-				<Col></Col>
-
-				<Col sm={6}>
-					<h2 style={{ marginLeft: "40%" }}>SSO Login</h2>
-					<div className="shadow-class1" style={{ marginTop: ".2%", marginBottom: "2%" }}>
-					<Card
-						// title="Login with your Domain Credentials"
-
-						title={
-							<img
-								src={GILogo}
-								style={{
-									flex: 1,
-									width: "40%",
-									height: "40%",
-									resizeMode: "contain",
-									marginLeft: "30%",
-								}}
-							/>
-						}
-						style={{
-							// backgroundColor: "transparent",
-							// shadowOpacity: 0,
-							width: "100%",
-							marginBottom: "2em",
-							display: "flex",
-							justifyContent: "center",
-						}}
-					>
-						<div style={{ marginLeft: "28%" }}>
-							<h5>Username</h5>
-							<span className="ml-2">
-								<InputText
-									id="username"
+		<Container className="d-flex justify-content-center align-items-center" style={{ height: "50%" }}>
+			<Row className="w-100">
+				<Col md={{ span: 6, offset: 3 }}>
+					<Card className="shadow-lg p-4">
+						<div className="text-center mb-4">
+							<img src={GILogo} alt="Logo" style={{ width: "50%", height: "auto" }} />
+							<h3 className="mt-3">SSO Login</h3>
+						</div>
+						<Form>
+							<Form.Group className="mb-3" controlId="formUsername">
+								<Form.Label>Username</Form.Label>
+								<Form.Control
+									type="text"
+									placeholder="Enter your username"
 									value={user}
 									onChange={(e) => setUser(e.target.value)}
 								/>
-							</span>{" "}
-						</div>
+							</Form.Group>
 
-						<br />
-						<div style={{ marginLeft: "30%" }}>
-							<h5>Password</h5>
+							<Form.Group className="mb-3" controlId="formPassword">
+								<Form.Label>Password</Form.Label>
+								<Form.Control
+									type="password"
+									placeholder="Enter your password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+								/>
+							</Form.Group>
 
-							<Password
-								id="password"
-								value={password}
-								feedback={false}
-								onChange={(e) => setPassword(e.target.value)}
-								toggleMask
-							/>
-						</div>
-
-						<br></br>
-						<h5 style={{ marginLeft: "25%" }}>
-							Login with your Desktop Credentials{" "}
-						</h5>
-						<div style={{ marginLeft: "40%" }}>
-							<Button
-								icon="pi pi-sign-out"
-								severity="success"
-								raised
-								rounded
-								size="large"
-								type="submit"
-								style={{
-									float: "center",
-								}}
-								label="Login"
-								aria-label="Login"
-								onClick={() => {
-									onClickLogin();
-								}}
-							/>
-							{/* <Button label="Success" severity="success" rounded /> */}
-						</div>
-					</Card></div>
+							<div className="text-center">
+								<Button
+									variant="primary"
+									size="lg"
+									onClick={onClickLogin}
+									className="w-100"
+								>
+									Login
+								</Button>
+							</div>
+						</Form>
+						<p className="text-center mt-3 text-muted">
+							Login with your Desktop Credentials
+						</p>
+					</Card>
 				</Col>
-
-				<Col></Col>
 			</Row>
 		</Container>
 	);
