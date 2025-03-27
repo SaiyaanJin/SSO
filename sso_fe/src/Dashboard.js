@@ -217,11 +217,12 @@ export default function App() {
 						desc="Management Information System"
 					/>
 					<AppCard
-						imageName="Services.png"
-						linkTo="http://10.3.200.63:3001/"
-						title="Services"
-						desc="Service Request Portal of ERLDC"
+						imageName="CRMS.jpg"
+						linkTo="http://10.3.200.130/Codebook/index"
+						title="CRMS-ERLDC"
+						desc="Control Room Management System"
 					/>
+					
 					<div className="field"> </div>
 				</div>
 
@@ -295,7 +296,7 @@ export default function App() {
 
 				<br />
 
-				<div className="flex flex-wrap gap-1 justify-content-between align-items-center" style={{marginLeft:"-48.5%"}}>
+				<div className="flex flex-wrap gap-1 justify-content-between align-items-center">
 					<div className="field"> </div>
 					<AppCard
 						imageName="grafana.jpg"
@@ -303,14 +304,25 @@ export default function App() {
 						title="Intraday Forecast"
 						desc="Intraday Forecast portal of ERLDC"
 					/>
-					<div style={{marginLeft:"-32.5%"}}>
+					
 					<AppCard
 						imageName="Resource.jpeg"
 						linkTo="http://10.3.200.153:4200/"
 						title="Resource Adequacy Portal"
 						desc="Forecast data from constituents"
 					/>
-					</div>
+					<AppCard
+						imageName="Services.png"
+						linkTo="http://10.3.200.63:3001/"
+						title="Services"
+						desc="Service Request Portal of ERLDC"
+					/>
+					<AppCard
+						imageName="Feedback.jpg"
+						linkTo="https://feedback.erldc.in:5000/"
+						title="Feedback Portal"
+						desc="IMS feedback from stakeholders of ERLDC"
+					/>
 					
 					<div className="field"> </div>
 				</div>
