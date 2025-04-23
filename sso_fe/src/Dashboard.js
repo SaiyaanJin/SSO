@@ -4,8 +4,9 @@ import axios from "axios";
 import { Container, Row, Col } from "react-bootstrap";
 import AppCard from "./AppCard.js";
 import { Button } from "primereact/button";
-import jwt_decode from "jwt-decode";
+import {jwtDecode as jwt_decode} from "jwt-decode";
 import "./cssFiles/ButtonDemo.css";
+import "./Dashboard.css"; // Add a custom CSS file for styling
 
 export default function App() {
 	var navigate = new useNavigate();
