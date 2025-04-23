@@ -49,7 +49,7 @@ function LoginApp() {
 		const jwt = sign({ username: user, password: password }, "frontendss0@posoco");
 
 		axios
-			.post("http://10.3.230.63:5000/token", {
+			.post("https://sso.erldc.in:5000/token", {
 				headers: { token: jwt },
 			})
 			.then((response) => {
