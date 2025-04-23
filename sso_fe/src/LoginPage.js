@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Form, Button, Container, Row, Col, Card } from "react-bootstrap";
 import axios from "axios";
-// import { jwtDecode as jwt_decode } from "jwt-decode";
-import jwt_decode from "jwt-decode";
+import { jwtDecode as jwt_decode } from "jwt-decode";
+// import jwt_decode from "jwt-decode";
 import { useNavigate } from "react-router-dom";
 import GILogo from "./staticFiles/GILogo.png";
 import "bootstrap/dist/css/bootstrap.min.css";
