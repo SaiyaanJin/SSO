@@ -213,7 +213,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="MIS.png"
-						linkTo="http://10.3.200.63:3002"
+						linkTo="http://10.3.230.62:3002"
 						title="MIS ERLDC"
 						desc="Management Information System"
 					/>
@@ -251,7 +251,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="SVS.png"
-						linkTo="http://10.3.200.63:3003/"
+						linkTo="http://10.3.230.62:3003/"
 						title="SEM vs SCADA"
 						desc="SEM vs SCADA Portal of ERLDC"
 					/>
@@ -270,7 +270,7 @@ export default function App() {
 					/> */}
 					<AppCard
 						imageName="Energy_Map.jpeg"
-						linkTo="http://10.3.200.63:3500/"
+						linkTo="http://10.3.230.65:3000/"
 						title="Map-Visualizer"
 						desc="India & Eastern Map-Visualizer"
 					/>
@@ -314,7 +314,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="Services.png"
-						linkTo="http://10.3.200.63:3001/"
+						linkTo="http://10.3.230.62:3001/"
 						title="Services"
 						desc="Service Request Portal of ERLDC"
 					/>
