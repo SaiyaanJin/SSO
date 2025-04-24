@@ -276,13 +276,13 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="HRD.jpeg"
-						linkTo="http://10.3.200.63:3100/"
+						linkTo="http://10.3.230.67:3100/"
 						title="HRD Portal"
 						desc="HRD Trainings of ERLDC"
 					/>
 					<AppCard
 						imageName="Digital_Dairy.jpeg"
-						linkTo="http://10.3.200.63:3101/"
+						linkTo="http://10.3.230.67:3101/"
 						title="My Accomplishment: Digital Diary Portal"
 						desc="Achievements Register of ERLDC"
 					/>
