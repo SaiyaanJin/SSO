@@ -42,7 +42,19 @@ export default function AppCard(props) {
 		// <div className="shadow p-0.9 mb-3 bg-white rounded">
 		<div className="shadow-class1">
 			<Card
-				style={{ maxWidth:"400px", maxHeight:"430px",minWidth:"400px", minHeight:"430px", title:"small"}}
+			className="shadow-lg p-4"
+			style={{
+				backgroundColor: "rgba(255, 255, 255, 0)", // white with 75% opacity
+				backdropFilter: "blur(5px)", // optional: adds a blur effect to background
+				borderRadius: "1rem", // optional: softens corners for better visual
+				maxWidth:"400px",
+				maxHeight:"430px",
+				minWidth:"400px", 
+				minHeight:"430px", 
+				title:"small",
+				fontSize:"small"
+			}}
+				
 				title={props.title}
 				subTitle="Description"
 				footer={footer}

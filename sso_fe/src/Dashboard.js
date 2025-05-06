@@ -283,7 +283,7 @@ export default function App() {
 					<AppCard
 						imageName="Digital_Dairy.jpeg"
 						linkTo="http://10.3.230.67:3101/"
-						title="My Accomplishment: Digital Diary Portal"
+						title="Digital Diary Portal"
 						desc="Achievements Register of ERLDC"
 					/>
 					<AppCard

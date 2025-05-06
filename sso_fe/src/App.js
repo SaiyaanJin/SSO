@@ -14,7 +14,7 @@ export default function App() {
 				className="shadow p-3 mb-5 bg-white rounded"
 				style={{ marginTop: "-1.1%" }}
 			> */}
-			<div className="shadow-class" style={{ marginTop: "0%", marginBottom: "2%" }}>
+			<div className="shadow-class" style={{ marginTop: "0%", marginBottom: "0%" }}>
 				<img
 					src={require("./staticFiles/GI-Nav1.jpg")}
 					className="img-fluid hover-shadow"
