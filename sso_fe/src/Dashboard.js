@@ -219,7 +219,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="CRMS.jpg"
-						linkTo="http://10.3.200.130/Codebook/index"
+						linkTo="http://crms.erldc.in/"
 						title="CRMS-ERLDC"
 						desc="Control Room Management System"
 					/>
@@ -239,7 +239,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="Phonebook.png"
-						linkTo="https://ephonebook.erldc.in/"
+						linkTo="https://ephonebook.erldc.in:8888"
 						title="E-Phonebook ERLDC"
 						desc="Phonebook of all Constituents of ERLDC"
 					/>
