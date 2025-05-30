@@ -4,7 +4,7 @@ import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
 // import jwt_decode from "jwt-decode";
 import { useNavigate } from "react-router-dom";
-import GILogo from "./staticFiles/GILogo.png";
+// import GILogo from "./staticFiles/GILogo.png";
 import SSOBack from "./staticFiles/SSO_back.png"; // Import the background image
 import "bootstrap/dist/css/bootstrap.min.css";
 import "primereact/resources/themes/lara-light-cyan/theme.css";
