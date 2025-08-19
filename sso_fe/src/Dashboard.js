@@ -213,7 +213,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="MDA.jpg"
-						linkTo="http://10.3.230.96:3000"
+						linkTo="http://10.3.230.94:3000"
 						title="MDA Software"
 						desc="Meter Data Archival Software"
 					/>
