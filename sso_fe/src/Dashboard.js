@@ -207,16 +207,17 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="MDP.png"
-						linkTo="http://10.3.200.95:3000"
+						linkTo="http://10.3.230.96:3000"
 						title="MDP Software"
 						desc="15 Minute Meter Data Processing Software"
 					/>
 					<AppCard
-						imageName="MIS.png"
-						linkTo="http://10.3.230.62:3002"
-						title="MIS ERLDC"
-						desc="Management Information System"
+						imageName="MDA.jpg"
+						linkTo="http://10.3.230.96:3000"
+						title="MDA Software"
+						desc="Meter Data Archival Software"
 					/>
+					
 					<AppCard
 						imageName="CRMS.jpg"
 						linkTo="http://crms.erldc.in/"
@@ -232,6 +233,12 @@ export default function App() {
 				<div className="flex flex-wrap gap-1 justify-content-between align-items-center">
 					<div className="field"> </div>
 					<AppCard
+						imageName="MIS.png"
+						linkTo="http://10.3.230.62:3002"
+						title="MIS ERLDC"
+						desc="Management Information System"
+					/>
+					<AppCard
 						imageName="Despatch.png"
 						linkTo="https://dispatch.erldc.in:8001"
 						title="Dispatch Register"
@@ -243,12 +250,12 @@ export default function App() {
 						title="E-Phonebook ERLDC"
 						desc="Phonebook of all Constituents of ERLDC"
 					/>
-					<AppCard
+					{/* <AppCard
 						imageName="liveries.png"
 						linkTo="https://webapp.erldc.in:8080/liveries/index.php"
 						title="Liveries"
 						desc="Liveries portal of ERLDC"
-					/>
+					/> */}
 					<AppCard
 						imageName="SVS.png"
 						linkTo="http://10.3.230.62:3003/"
