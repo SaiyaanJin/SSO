@@ -327,7 +327,7 @@ export default function App() {
 					/>
 					<AppCard
 						imageName="Feedback.jpg"
-						linkTo="https://feedback.erldc.in:5000/"
+						linkTo="https://feedback.erldc.in"
 						title="Feedback Portal"
 						desc="IMS feedback from stakeholders of ERLDC"
 					/>
