@@ -1,23 +1,38 @@
+import os
+from pprint import pprint
+
 import ldap
 
-l = ldap.initialize("ldap://10.3.110.120")
 
-l.protocol_version = ldap.VERSION3
+LDAP_URI = os.getenv("SSO_LDAP_URI", "ldap://10.3.110.120")
+LDAP_BASE_DN = os.getenv("SSO_LDAP_BASE_DN", "dc=erldc,dc=net")
+LDAP_ADMIN_USER = os.getenv("SSO_LDAP_ADMIN_USER")
+LDAP_ADMIN_PASSWORD = os.getenv("SSO_LDAP_ADMIN_PASSWORD")
 
-l.set_option(ldap.OPT_REFERRALS, 0)
 
-bind = l.simple_bind_s("erldc\\administrator", "EradRT$A09")
+def main():
+    if not LDAP_ADMIN_USER or not LDAP_ADMIN_PASSWORD:
+        raise SystemExit(
+            "Set SSO_LDAP_ADMIN_USER and SSO_LDAP_ADMIN_PASSWORD before running this diagnostic."
+        )
 
-result = l.search_s('dc=erldc,dc=net', ldap.SCOPE_SUBTREE,
-                    'userPrincipalName=*', [])
+    connection = ldap.initialize(LDAP_URI)
+    connection.protocol_version = ldap.VERSION3
+    connection.set_option(ldap.OPT_REFERRALS, 0)
+    connection.simple_bind_s(LDAP_ADMIN_USER, LDAP_ADMIN_PASSWORD)
 
-l = []
-
-for item in result:
     try:
-        print(item[1])
-    except:
-        pass
+        result = connection.search_s(
+            LDAP_BASE_DN,
+            ldap.SCOPE_SUBTREE,
+            "(userPrincipalName=*)",
+            ["cn", "mail", "sAMAccountName", "telephoneNumber", "distinguishedName"],
+        )
+        for _, attrs in result:
+            pprint(attrs)
+    finally:
+        connection.unbind_s()
 
 
-# OU = result[0][0].split(",")[1][3:]
+if __name__ == "__main__":
+    main()
