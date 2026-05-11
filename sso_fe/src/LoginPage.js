@@ -15,6 +15,7 @@ function LoginApp() {
 	const [user, setUser] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
+	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
 
 	useEffect(() => {
@@ -125,13 +126,24 @@ function LoginApp() {
 							<i className="pi pi-key" aria-hidden="true" />
 							<input
 								id="formPassword"
-								type="password"
+								type={showPassword ? "text" : "password"}
 								placeholder="Enter password"
 								value={password}
 								onChange={(event) => setPassword(event.target.value)}
 								autoComplete="current-password"
 								required
 							/>
+							<button
+								type="button"
+								className="login-password-toggle"
+								aria-label={showPassword ? "Hide password" : "Show password"}
+								onClick={() => setShowPassword((isVisible) => !isVisible)}
+							>
+								<i
+									className={showPassword ? "pi pi-eye-slash" : "pi pi-eye"}
+									aria-hidden="true"
+								/>
+							</button>
 						</div>
 
 						{errorMessage && (

@@ -227,6 +227,42 @@ html[data-theme="dark"] .login-field input {
 	color: #98a2b3;
 }
 
+.login-password-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	flex: 0 0 34px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: #667085;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		color 160ms ease,
+		transform 160ms ease;
+}
+
+.login-password-toggle:hover {
+	background: rgba(15, 118, 110, 0.1);
+	color: #0f766e;
+}
+
+.login-password-toggle:active {
+	transform: scale(0.96);
+}
+
+html[data-theme="dark"] .login-password-toggle {
+	color: #94a3b8;
+}
+
+html[data-theme="dark"] .login-password-toggle:hover {
+	background: rgba(45, 212, 191, 0.12);
+	color: #2dd4bf;
+}
+
 .login-field i {
 	transition: color 160ms ease, transform 160ms ease;
 }
