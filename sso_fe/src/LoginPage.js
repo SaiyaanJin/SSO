@@ -1,141 +1,156 @@
 import React, { useEffect, useState } from "react";
-import { Form, Button, Container, Row, Col, Card } from "react-bootstrap";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
-// import jwt_decode from "jwt-decode";
 import { useNavigate } from "react-router-dom";
-// import GILogo from "./staticFiles/GILogo.png";
-import SSOBack from "./staticFiles/SSO_back.png"; // Import the background image
+import GILogo from "./staticFiles/GILogo.png";
+import SSOBack from "./staticFiles/SSO_back.png";
 import "bootstrap/dist/css/bootstrap.min.css";
-import "primereact/resources/themes/lara-light-cyan/theme.css";
-import "primeflex/primeflex.css";
-import "primereact/resources/themes/lara-light-indigo/theme.css"; //theme
-import "primereact/resources/primereact.min.css"; //core css
-import "primeicons/primeicons.css"; //icons
+import "primereact/resources/themes/lara-light-indigo/theme.css";
+import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
+import "./LoginPage.css";
 
 function LoginApp() {
 	const [password, setPassword] = useState("");
 	const [user, setUser] = useState("");
-
+	const [isLoading, setIsLoading] = useState(false);
+	const [errorMessage, setErrorMessage] = useState("");
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		if (password && user) {
-			const listener = (event) => {
-				if (event.code === "Enter" || event.code === "NumpadEnter") {
-					event.preventDefault();
-					onClickLogin();
-				}
-			};
-			document.addEventListener("keydown", listener);
-			return () => {
-				document.removeEventListener("keydown", listener);
-			};
-		}
-	}, [user, password]);
+		const token = localStorage.getItem("token");
 
-	useEffect(() => {
-		var token = localStorage.getItem("token");
-		if (token === null) {
+		if (!token) {
 			return;
 		}
-		var decoded = jwt_decode(token, "it@posoco");
-		if (decoded.Login) {
-			navigate("/dashboard");
+
+		try {
+			const decoded = jwt_decode(token);
+
+			if (decoded.Login) {
+				navigate("/dashboard");
+			}
+		} catch (error) {
+			localStorage.removeItem("token");
 		}
-	}, []);
+	}, [navigate]);
 
-	const onClickLogin = () => {
-		const sign = require("jwt-encode");
-		const jwt = sign({ username: user, password: password }, "frontendss0@posoco");
+	const onClickLogin = async (event) => {
+		event.preventDefault();
+		setErrorMessage("");
+		setIsLoading(true);
 
-		axios
-			.post("https://sso.erldc.in:5000/token", {
+		try {
+			const sign = require("jwt-encode");
+			const jwt = sign(
+				{ username: user, password: password },
+				"frontendss0@posoco"
+			);
+			const response = await axios.post("https://sso.erldc.in:5000/token", {
 				headers: { token: jwt },
-			})
-			.then((response) => {
-				var decoded = jwt_decode(response["data"]["Token"], "it@posoco");
-				localStorage.setItem("token", response["data"]["Token"]);
-
-				if (decoded.Login) {
-					navigate("/dashboard");
-				} else {
-					alert("Invalid Credentials");
-				}
-			})
-			.catch((error) => {
-				console.log(error);
 			});
+			const decoded = jwt_decode(response.data.Token);
+
+			if (decoded.Login) {
+				localStorage.setItem("token", response.data.Token);
+				navigate("/dashboard");
+			} else {
+				localStorage.removeItem("token");
+				setErrorMessage("Invalid credentials");
+			}
+		} catch (error) {
+			setErrorMessage("Unable to complete sign in. Please try again.");
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	return (
-		<div
-			style={{
-				backgroundImage: `url(${SSOBack})`,
-				backgroundSize: "cover",
-				backgroundPosition: "center",
-				minHeight: "100vh",
-				display: "flex",
-				justifyContent: "center",
-				alignItems: "flex-start", // aligns items to the top
-				paddingTop: "10vh", // pushes the card down from the top a bit
-			}}
+		<main
+			className="login-page"
+			style={{ backgroundImage: `linear-gradient(110deg, rgba(8, 22, 37, 0.9), rgba(7, 89, 83, 0.78), rgba(122, 55, 24, 0.62)), url(${SSOBack})` }}
 		>
-			<Container className="d-flex justify-content-center align-items-center" style={{ height: "30%" }}>
-				<Row className="w-100">
-					<Col md={{ span: 6, offset: 3 }}>
-					<Card
-						className="shadow-lg p-4"
-						style={{
-							backgroundColor: "rgba(255, 255, 255, 0)", // white with 75% opacity
-							backdropFilter: "blur(5px)", // optional: adds a blur effect to background
-							borderRadius: "1rem", // optional: softens corners for better visual
-						}}
-					>
-							<div className="text-center mb-4">
-								{/* <img src={GILogo} alt="Logo" style={{ width: "50%", height: "auto" }} /> */}
-								<h3 style={{color:"white"}}>SSO Login</h3>
-							</div>
-							<Form>
-								<Form.Group className="mb-3" controlId="formUsername">
-									<Form.Label><h4 style={{color:"white"}}>Username</h4></Form.Label>
-									<Form.Control
-										type="text"
-										placeholder="Enter your username"
-										value={user}
-										onChange={(e) => setUser(e.target.value)}
-									/>
-								</Form.Group>
+			<div className="login-shell">
+				<section className="login-intro" aria-label="Portal identity">
+					<img src={GILogo} alt="Grid India" className="login-logo" />
+					<p className="login-eyebrow">ERLDC, Grid India</p>
+					<h1>Single Sign On</h1>
+					<p className="login-copy">
+						Authorized access for ERLDC in-house grid operation applications.
+					</p>
+					<div className="login-assurance" aria-label="Security highlights">
+						<span>
+							<i className="pi pi-shield" aria-hidden="true" />
+							LDAP backed
+						</span>
+						<span>
+							<i className="pi pi-clock" aria-hidden="true" />
+							5 hr session
+						</span>
+						<span>
+							<i className="pi pi-lock" aria-hidden="true" />
+							Secured token
+						</span>
+					</div>
+				</section>
 
-								<Form.Group className="mb-3" controlId="formPassword">
-								<Form.Label><h4 style={{color:"white"}}>Password</h4></Form.Label>
-									<Form.Control
-										type="password"
-										placeholder="Enter your password"
-										value={password}
-										onChange={(e) => setPassword(e.target.value)}
-									/>
-								</Form.Group>
+				<section className="login-card" aria-label="SSO login">
+					<div className="login-card__header">
+						<span className="login-card__icon">
+							<i className="pi pi-user" aria-hidden="true" />
+						</span>
+						<div>
+							<h2>SSO Login</h2>
+							<p>Use your desktop credentials</p>
+						</div>
+					</div>
 
-								<div className="text-center">
-									<Button
-										variant="danger"
-										size="lg"
-										onClick={onClickLogin}
-										className="w-100"
-									>
-										Login
-									</Button>
-								</div>
-							</Form>
-							<p  style={{color:"black"}}>
-								Login with your Desktop Credentials
+					<form className="login-form" onSubmit={onClickLogin}>
+						<label htmlFor="formUsername">Username</label>
+						<div className="login-field">
+							<i className="pi pi-id-card" aria-hidden="true" />
+							<input
+								id="formUsername"
+								type="text"
+								placeholder="Enter username"
+								value={user}
+								onChange={(event) => setUser(event.target.value)}
+								autoComplete="username"
+								required
+							/>
+						</div>
+
+						<label htmlFor="formPassword">Password</label>
+						<div className="login-field">
+							<i className="pi pi-key" aria-hidden="true" />
+							<input
+								id="formPassword"
+								type="password"
+								placeholder="Enter password"
+								value={password}
+								onChange={(event) => setPassword(event.target.value)}
+								autoComplete="current-password"
+								required
+							/>
+						</div>
+
+						{errorMessage && (
+							<p className="login-error" role="alert">
+								{errorMessage}
 							</p>
-						</Card>
-					</Col>
-				</Row>
-			</Container>
-		</div>
+						)}
+
+						<button className="login-submit" type="submit" disabled={isLoading}>
+							<span>{isLoading ? "Signing in" : "Login"}</span>
+							<i
+								className={isLoading ? "pi pi-spin pi-spinner" : "pi pi-arrow-right"}
+								aria-hidden="true"
+							/>
+						</button>
+					</form>
+				</section>
+			</div>
+		</main>
 	);
 }
 

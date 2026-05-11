@@ -1,12 +1,393 @@
-.p-card-title{
-    font-size: large;
+.App {
+	min-height: 100vh;
 }
-/* .shadow-class {
-    box-shadow: 20px 15px 12px rgb(204, 204, 204);
-    
-    
-  } */
-  /* .shadow-class1 {
-    box-shadow: 8px 10px 16px rgb(195, 219, 255);
-    
-  } */
+
+.theme-toggle {
+	position: fixed;
+	top: 17px;
+	right: 18px;
+	z-index: 50;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border: 1px solid rgba(15, 23, 42, 0.12);
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.9);
+	color: #102a43;
+	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+	backdrop-filter: blur(16px);
+	cursor: pointer;
+	transition:
+		transform 160ms ease,
+		background 160ms ease,
+		color 160ms ease,
+		border-color 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.theme-toggle:hover {
+	transform: translateY(-2px);
+	border-color: rgba(15, 118, 110, 0.3);
+	background: #ffffff;
+	color: #0f766e;
+	box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+}
+
+.theme-toggle i {
+	font-size: 1rem;
+}
+
+html[data-theme="dark"] .theme-toggle {
+	border-color: rgba(148, 163, 184, 0.26);
+	background: rgba(15, 23, 42, 0.88);
+	color: #fbbf24;
+	box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+}
+
+html[data-theme="dark"] .theme-toggle:hover {
+	border-color: rgba(45, 212, 191, 0.42);
+	background: rgba(17, 34, 52, 0.96);
+	color: #fde68a;
+}
+
+.app-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 398px;
+	overflow: hidden;
+	border: 1px solid color-mix(in srgb, var(--app-accent, #2563eb) 46%, rgba(15, 23, 42, 0.13));
+	border-radius: 8px;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.98), #ffffff 48%),
+		radial-gradient(circle at 14% -4%, color-mix(in srgb, var(--app-accent, #2563eb) 26%, transparent), transparent 38%);
+	box-shadow:
+		0 18px 42px rgba(21, 33, 52, 0.12),
+		0 8px 18px color-mix(in srgb, var(--app-accent, #2563eb) 9%, transparent);
+	transition:
+		transform 260ms ease,
+		box-shadow 260ms ease,
+		border-color 260ms ease;
+	animation:
+		cardFadeIn 520ms ease both,
+		cardFloat 5800ms ease-in-out infinite;
+	will-change: transform;
+}
+
+html[data-theme="dark"] .app-card {
+	border-color: color-mix(in srgb, var(--app-accent, #2563eb) 42%, rgba(148, 163, 184, 0.18));
+	background:
+		linear-gradient(180deg, rgba(20, 31, 48, 0.98), #101827 52%),
+		radial-gradient(circle at 14% -4%, color-mix(in srgb, var(--app-accent, #2563eb) 24%, transparent), transparent 38%);
+	box-shadow:
+		0 18px 42px rgba(0, 0, 0, 0.32),
+		0 8px 18px color-mix(in srgb, var(--app-accent, #2563eb) 12%, transparent);
+}
+
+.app-card::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 5px;
+	background: linear-gradient(90deg, var(--app-accent, #2563eb), color-mix(in srgb, var(--app-accent, #2563eb) 42%, white), var(--app-accent, #2563eb));
+	z-index: 2;
+}
+
+.app-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+		inset 0 -80px 90px rgba(248, 250, 252, 0.52);
+	pointer-events: none;
+}
+
+html[data-theme="dark"] .app-card::after {
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+		inset 0 -80px 90px rgba(15, 23, 42, 0.46);
+}
+
+.app-card:hover {
+	transform: translateY(-8px) scale(1.01);
+	border-color: var(--app-accent, #2563eb);
+	box-shadow:
+		0 26px 58px rgba(21, 33, 52, 0.18),
+		0 12px 30px color-mix(in srgb, var(--app-accent, #2563eb) 15%, transparent),
+		0 0 0 4px color-mix(in srgb, var(--app-accent, #2563eb) 12%, transparent);
+	animation-play-state: paused;
+}
+
+.app-card--amber {
+	--app-accent: #b45309;
+}
+
+.app-card--blue {
+	--app-accent: #1d4ed8;
+}
+
+.app-card--green {
+	--app-accent: #15803d;
+}
+
+.app-card--indigo {
+	--app-accent: #4338ca;
+}
+
+.app-card--red {
+	--app-accent: #be123c;
+}
+
+.app-card--teal {
+	--app-accent: #0f766e;
+}
+
+.app-card--violet {
+	--app-accent: #7e22ce;
+}
+
+.app-card__media {
+	position: relative;
+	aspect-ratio: 16 / 9;
+	background: #eef2f7;
+	overflow: hidden;
+}
+
+.app-card__media::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background:
+		linear-gradient(180deg, transparent 46%, rgba(8, 15, 27, 0.56)),
+		linear-gradient(135deg, color-mix(in srgb, var(--app-accent, #2563eb) 18%, transparent), transparent 46%);
+	opacity: 0.9;
+	transition: opacity 220ms ease;
+}
+
+.app-card__media img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	transition: transform 360ms ease;
+}
+
+.app-card:hover .app-card__media img {
+	transform: scale(1.06);
+}
+
+.app-card:hover .app-card__media::after {
+	opacity: 0.72;
+}
+
+.app-card__category {
+	position: absolute;
+	right: 14px;
+	bottom: 14px;
+	min-height: 28px;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	border-radius: 8px;
+	padding: 0 10px;
+	background: rgba(255, 255, 255, 0.92);
+	color: #172033;
+	font-size: 0.78rem;
+	font-weight: 850;
+	box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
+	z-index: 1;
+}
+
+html[data-theme="dark"] .app-card__category {
+	background: rgba(15, 23, 42, 0.88);
+	color: #e5edf8;
+}
+
+.app-card__category::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+	background: var(--app-accent, #2563eb);
+}
+
+.app-card__body {
+	flex: 1;
+	padding: 18px 18px 6px;
+}
+
+.app-card__title-row {
+	display: grid;
+	grid-template-columns: 42px 1fr;
+	align-items: center;
+	gap: 12px;
+}
+
+.app-card__icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--app-accent, #2563eb) 13%, white);
+	color: var(--app-accent, #2563eb);
+	font-size: 1.04rem;
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent, #2563eb) 18%, transparent);
+	transition:
+		background 180ms ease,
+		color 180ms ease,
+		transform 180ms ease;
+}
+
+html[data-theme="dark"] .app-card__icon {
+	background: color-mix(in srgb, var(--app-accent, #2563eb) 20%, #111827);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent, #2563eb) 26%, transparent);
+}
+
+.app-card:hover .app-card__icon {
+	background: var(--app-accent, #2563eb);
+	color: #ffffff;
+	transform: rotate(-4deg) scale(1.04);
+}
+
+.app-card__body h2 {
+	margin: 0;
+	color: #172033;
+	font-size: 1.1rem;
+	font-weight: 900;
+	line-height: 1.22;
+	letter-spacing: 0;
+	overflow-wrap: anywhere;
+}
+
+html[data-theme="dark"] .app-card__body h2 {
+	color: #f8fafc;
+}
+
+.app-card__body p {
+	margin: 12px 0 0;
+	color: #5b6678;
+	font-size: 0.93rem;
+	line-height: 1.45;
+}
+
+html[data-theme="dark"] .app-card__body p {
+	color: #aebbd0;
+}
+
+.app-card__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 18px 18px;
+}
+
+.app-card__hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 30px;
+	border-radius: 8px;
+	padding: 0 10px;
+	background: color-mix(in srgb, var(--app-accent, #2563eb) 9%, #ffffff);
+	color: color-mix(in srgb, var(--app-accent, #2563eb) 78%, #172033);
+	font-size: 0.78rem;
+	font-weight: 900;
+}
+
+html[data-theme="dark"] .app-card__hint {
+	background: color-mix(in srgb, var(--app-accent, #2563eb) 16%, #101827);
+	color: color-mix(in srgb, var(--app-accent, #2563eb) 42%, #e5edf8);
+}
+
+.app-card__hint i {
+	font-size: 0.78rem;
+}
+
+.app-card__action.p-button {
+	min-height: 38px;
+	border: 0;
+	border-radius: 8px;
+	background: linear-gradient(135deg, #102a43, color-mix(in srgb, var(--app-accent, #2563eb) 42%, #102a43));
+	color: #ffffff;
+	font-weight: 900;
+	padding-inline: 16px;
+	box-shadow: 0 12px 26px color-mix(in srgb, var(--app-accent, #2563eb) 20%, transparent);
+	transition:
+		transform 180ms ease,
+		background 180ms ease,
+		box-shadow 180ms ease;
+}
+
+.app-card__action.p-button:enabled:hover {
+	background: var(--app-accent, #0f766e);
+	color: #ffffff;
+	transform: translateY(-1px);
+	box-shadow: 0 16px 32px color-mix(in srgb, var(--app-accent, #2563eb) 28%, transparent);
+}
+
+.app-card__action .p-button-icon {
+	font-size: 0.82rem;
+}
+
+.app-grid .app-card:nth-child(2n) {
+	animation-delay: 60ms, 900ms;
+}
+
+.app-grid .app-card:nth-child(3n) {
+	animation-delay: 110ms, 1600ms;
+}
+
+.app-grid .app-card:nth-child(4n) {
+	animation-delay: 160ms, 2300ms;
+}
+
+@keyframes cardIn {
+	from {
+		opacity: 0;
+		transform: translateY(18px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes cardFadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes cardFloat {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-4px);
+	}
+}
+
+@media (max-width: 640px) {
+	.theme-toggle {
+		top: 14px;
+		right: 14px;
+		width: 38px;
+		height: 38px;
+	}
+
+	.app-card {
+		min-height: auto;
+		animation: cardFadeIn 520ms ease both;
+	}
+}

@@ -1,69 +1,57 @@
-import { React, useState } from "react";
-// import { Routes, Route, Link } from "react-router-dom";
-import "./App.css";
-// import LoginApp from "./LoginPage.js";
-// import Dashboard from "./Dashboard.js";
-import "../node_modules/primeflex/primeflex.css";
-import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
-// import { Container, Row, Col } from "react-bootstrap";
-import { Card } from "primereact/card";
+import React from "react";
 import { Button } from "primereact/button";
-// import mdpLOGO from "./staticFiles/MDP.png";
+import "./App.css";
 
-export default function AppCard(props) {
-	const token = useState(localStorage.getItem("token"))[0];
-	
+export default function AppCard({
+	imageName,
+	linkTo,
+	title,
+	desc,
+	category,
+	accent,
+	icon = "pi pi-box",
+}) {
+	const token = localStorage.getItem("token");
+	const imageSrc = require("./staticFiles/" + imageName);
 
-	const header = (
-		<img
-			alt="Card"
-			height="200"
-			width="400"
-			src={require("./staticFiles/" + props.imageName)}
-		/>
-	);
-	const footer = (
-		// <a style={{ marginLeft: "35%", marginTop: "-10%" }} href={props.linkTo + "?token=" + token}>
-			<Button
-				style={{size:"small", borderRadius:"25px", backgroundColor:"aliceblue", marginLeft: "34%"}}
-				icon="pi pi-external-link"
-				size="small"
-				outlined
-				severity="info"
-				raised
-				rounded
-				label="VISIT"
-				onClick={()=>{window.open(props.linkTo + "?token=" + token)}} 
-			/>
-		// </a>
-	);
+	const openApplication = () => {
+		const separator = linkTo.includes("?") ? "&" : "?";
+		const tokenQuery = token ? `${separator}token=${encodeURIComponent(token)}` : "";
+
+		window.open(`${linkTo}${tokenQuery}`, "_blank", "noopener,noreferrer");
+	};
 
 	return (
-		// <div className="shadow p-0.9 mb-3 bg-white rounded">
-		<div className="shadow-class1">
-			<Card
-			className="shadow-lg p-4"
-			style={{
-				backgroundColor: "rgba(255, 255, 255, 0)", // white with 75% opacity
-				backdropFilter: "blur(5px)", // optional: adds a blur effect to background
-				borderRadius: "1rem", // optional: softens corners for better visual
-				maxWidth:"400px",
-				maxHeight:"430px",
-				minWidth:"400px", 
-				minHeight:"430px", 
-				title:"small",
-				fontSize:"small"
-			}}
-				
-				title={props.title}
-				subTitle="Description"
-				footer={footer}
-				header={header}
-			>
-				<p className="m-0" style={{ lineHeight: "0.05" }}>
-					{props.desc}
-				</p>
-			</Card>
-		</div>
+		<article className={`app-card app-card--${accent || "blue"}`}>
+			<div className="app-card__media">
+				<img src={imageSrc} alt="" loading="lazy" />
+				<span className="app-card__category">{category}</span>
+			</div>
+
+			<div className="app-card__body">
+				<div className="app-card__title-row">
+					<span className="app-card__icon" aria-hidden="true">
+						<i className={icon} />
+					</span>
+					<h2>{title}</h2>
+				</div>
+				<p>{desc}</p>
+			</div>
+
+			<div className="app-card__footer">
+				<span className="app-card__hint">
+					<i className="pi pi-shield" aria-hidden="true" />
+					SSO
+				</span>
+				<Button
+					type="button"
+					className="app-card__action"
+					icon="pi pi-arrow-up-right"
+					label="Open"
+					aria-label={`Open ${title}`}
+					onClick={openApplication}
+				/>
+			</div>
+		</article>
 	);
 }

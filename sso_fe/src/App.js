@@ -1,32 +1,34 @@
 import * as React from "react";
 import { Routes, Route } from "react-router-dom";
-// import "./App.css";
 import LoginApp from "./LoginPage.js";
 import Dashboard from "./Dashboard.js";
-// import { Button } from "primereact/button";
-// import "../node_modules/primeflex/primeflex.css";
-// import { StickyContainer, Sticky } from "react-sticky";
+import "./App.css";
 
 export default function App() {
+	const [theme, setTheme] = React.useState(() => {
+		return localStorage.getItem("sso-theme") || "light";
+	});
+
+	React.useEffect(() => {
+		document.documentElement.dataset.theme = theme;
+		localStorage.setItem("sso-theme", theme);
+	}, [theme]);
+
+	const toggleTheme = () => {
+		setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
+	};
+
 	return (
-		<div className="App">
-			{/* <div
-				className="shadow p-3 mb-5 bg-white rounded"
-				style={{ marginTop: "-1.1%" }}
-			> */}
-			<div className="shadow-class" style={{ marginTop: "0%", marginBottom: "0%" }}>
-				<img
-					src={require("./staticFiles/GI-Nav1.jpg")}
-					className="img-fluid hover-shadow"
-					alt=""
-					style={{
-						width: "100%",
-						// position: "-webkit-sticky" /* Safari */,
-						position: "sticky",
-						top: "0",
-					}}
-				/>
-			</div>
+		<div className="App" data-theme={theme}>
+			<button
+				type="button"
+				className="theme-toggle"
+				aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+				title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+				onClick={toggleTheme}
+			>
+				<i className={theme === "light" ? "pi pi-moon" : "pi pi-sun"} aria-hidden="true" />
+			</button>
 			<Routes>
 				<Route path="/" element={<LoginApp />} />
 				<Route path="dashboard" element={<Dashboard />} />
