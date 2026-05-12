@@ -455,9 +455,12 @@ def _reset_password_adsi(user_dn, new_password):
     """
     import win32com.client
     import pywintypes
+    import pythoncom
 
     dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
     
+    # Initialize COM for the current Flask thread
+    pythoncom.CoInitialize()
     try:
         dso = win32com.client.GetObject("LDAP:")
         # 1 = ADS_SECURE_AUTHENTICATION
@@ -483,6 +486,9 @@ def _reset_password_adsi(user_dn, new_password):
         return f"ADSI Error resetting password: {error_msg}"
     except Exception as e:
         return f"Unexpected Error: {str(e)}"
+    finally:
+        # Uninitialize COM for the thread
+        pythoncom.CoUninitialize()
 
 
 def admin_ldap_connection():
