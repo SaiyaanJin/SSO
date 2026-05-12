@@ -420,6 +420,153 @@ def me():
     )
 
 
+def _encode_ad_password(plain_text):
+    """Encode a password for Active Directory's unicodePwd attribute."""
+    return ('"' + plain_text + '"').encode("utf-16-le")
+
+
+def _validate_password_strength(password):
+    """Return an error message if the password is too weak, else None."""
+    if len(password) < 8:
+        return "Password must be at least 8 characters long"
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    has_special = any(c in '!@#$%^&*()-_=+[]{}|;:,.<>?/' for c in password)
+    categories = sum([has_upper, has_lower, has_digit, has_special])
+    if categories < 3:
+        return "Password must contain at least 3 of: uppercase, lowercase, digit, special character"
+    return None
+
+
+def admin_ldap_connection():
+    """Create an LDAP connection bound with admin credentials.
+
+    Uses LDAPS (or StartTLS) which is required by Active Directory
+    for password modification operations.
+    """
+    uri = settings.ldap_uri
+    # For password resets AD requires a secure connection.
+    # If the configured URI is plain ldap://, attempt ldaps:// on port 636.
+    if uri.startswith("ldap://"):
+        secure_uri = uri.replace("ldap://", "ldaps://", 1)
+        logger.info("Upgrading LDAP URI to secure: %s -> %s", uri, secure_uri)
+        uri = secure_uri
+
+    conn = ldap.initialize(uri)
+    conn.protocol_version = ldap.VERSION3
+    conn.set_option(ldap.OPT_REFERRALS, 0)
+    conn.set_option(ldap.OPT_NETWORK_TIMEOUT, settings.ldap_timeout_seconds)
+    conn.set_option(ldap.OPT_TIMEOUT, settings.ldap_timeout_seconds)
+    # In lab / internal CA environments you may need to skip TLS verification:
+    # conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+    # conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+    conn.simple_bind_s(settings.ldap_admin_user, settings.ldap_admin_password)
+    return conn
+
+
+@app.route("/reset-password", methods=["POST"])
+def reset_password():
+    """Allow a user to reset their own password.
+
+    Expects a JSON body (or a frontend-signed JWT in 'token') containing:
+        - username        : sAMAccountName (e.g. "12345")
+        - old_password    : current password for identity verification
+        - new_password    : desired new password
+
+    Flow:
+        1. Verify identity by binding with the user's old credentials.
+        2. Validate new-password strength.
+        3. Bind as domain admin and modify the unicodePwd attribute.
+    """
+    body = request.get_json(silent=True) or {}
+
+    # --- Support both raw JSON and frontend-JWT wrapped payloads -----------
+    if "token" in body:
+        try:
+            body = jwt.decode(body["token"], settings.frontend_secret, algorithms=["HS256"])
+        except jwt.InvalidTokenError:
+            return json_error("Bad frontend token", 400)
+
+    username = str(body.get("username", "")).strip()
+    old_password = str(body.get("old_password", ""))
+    new_password = str(body.get("new_password", ""))
+
+    if not username or not old_password or not new_password:
+        return json_error("username, old_password, and new_password are required", 400)
+
+    if old_password == new_password:
+        return json_error("New password must be different from the old password", 400)
+
+    # --- Validate password complexity --------------------------------------
+    strength_error = _validate_password_strength(new_password)
+    if strength_error:
+        return json_error(strength_error, 400)
+
+    # --- Step 1: Verify identity with old credentials ----------------------
+    user_conn = None
+    try:
+        user_conn = bind_as_user(username, old_password)
+    except ldap.INVALID_CREDENTIALS:
+        logger.info("Password-reset identity check failed for %s", username)
+        return json_error("Current password is incorrect", 401)
+    except ldap.LDAPError as exc:
+        logger.exception("LDAP error during identity verification for %s", username)
+        return json_error(f"LDAP error: {exc}", 503)
+    finally:
+        if user_conn:
+            try:
+                user_conn.unbind_s()
+            except Exception:
+                pass
+
+    # --- Step 2: Lookup user DN using admin connection ----------------------
+    admin_conn = None
+    try:
+        admin_conn = admin_ldap_connection()
+        user_record = search_user(admin_conn, username)
+        if not user_record:
+            return json_error("User not found in directory", 404)
+
+        user_dn = user_record[0]
+
+        # --- Step 3: Reset the password using admin privileges --------------
+        new_pwd_encoded = _encode_ad_password(new_password)
+        mod_attrs = [(ldap.MOD_REPLACE, "unicodePwd", [new_pwd_encoded])]
+        admin_conn.modify_s(user_dn, mod_attrs)
+
+        logger.info("Password successfully reset for %s", username)
+        return jsonify({"status": "success", "message": "Password has been reset successfully"})
+
+    except ldap.CONSTRAINT_VIOLATION as exc:
+        # AD returns this when password policy requirements are not met
+        logger.warning("Password policy violation for %s: %s", username, exc)
+        return json_error(
+            "Password does not meet Active Directory policy requirements "
+            "(e.g. history, length, complexity)",
+            400,
+        )
+    except ldap.UNWILLING_TO_PERFORM as exc:
+        logger.warning("AD refused password change for %s: %s", username, exc)
+        return json_error(
+            "Active Directory refused the operation. "
+            "Ensure the server connection is using LDAPS (port 636).",
+            400,
+        )
+    except ldap.INSUFFICIENT_ACCESS:
+        logger.error("Admin account lacks permission to reset password for %s", username)
+        return json_error("Admin account lacks permission to reset passwords", 403)
+    except ldap.LDAPError as exc:
+        logger.exception("LDAP error during password reset for %s", username)
+        return json_error(f"LDAP error: {exc}", 503)
+    finally:
+        if admin_conn:
+            try:
+                admin_conn.unbind_s()
+            except Exception:
+                pass
+
+
 @app.route("/visit", methods=["GET", "POST"])
 def visit():
     return Response(headers={"Authorization": "whatever"})
