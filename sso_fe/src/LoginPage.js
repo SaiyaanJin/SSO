@@ -107,13 +107,13 @@ function LoginApp() {
 					</div>
 
 					<form className="login-form" onSubmit={onClickLogin}>
-						<label htmlFor="formUsername">Username</label>
+						<label htmlFor="formUsername">Employee ID</label>
 						<div className="login-field">
 							<i className="pi pi-id-card" aria-hidden="true" />
 							<input
 								id="formUsername"
 								type="text"
-								placeholder="Enter username"
+								placeholder="Enter Employee ID"
 								value={user}
 								onChange={(event) => setUser(event.target.value)}
 								autoComplete="username"
@@ -121,13 +121,13 @@ function LoginApp() {
 							/>
 						</div>
 
-						<label htmlFor="formPassword">Password</label>
+						<label htmlFor="formPassword">Desktop Password</label>
 						<div className="login-field">
 							<i className="pi pi-key" aria-hidden="true" />
 							<input
 								id="formPassword"
 								type={showPassword ? "text" : "password"}
-								placeholder="Enter password"
+								placeholder="Enter desktop password"
 								value={password}
 								onChange={(event) => setPassword(event.target.value)}
 								autoComplete="current-password"

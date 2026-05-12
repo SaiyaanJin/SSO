@@ -276,7 +276,7 @@ export default function ResetPassword() {
 								<input
 									id="resetUsername"
 									type="text"
-									placeholder="Enter your username"
+									placeholder="Enter your Employee ID"
 									value={username}
 									onChange={(e) => setUsername(e.target.value)}
 									autoComplete="username"
