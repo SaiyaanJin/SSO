@@ -432,11 +432,6 @@ def me():
     )
 
 
-def _encode_ad_password(plain_text):
-    """Encode a password for Active Directory's unicodePwd attribute."""
-    return ('"' + plain_text + '"').encode("utf-16-le")
-
-
 def _validate_password_strength(password):
     """Return an error message if the password is too weak, else None."""
     if len(password) < 8:
@@ -451,13 +446,51 @@ def _validate_password_strength(password):
     return None
 
 
-def admin_ldap_connection():
-    """Create a secure LDAP connection bound with admin credentials.
+def _reset_password_adsi(user_dn, new_password):
+    """Use ADSI to reset a user's password.
+    
+    This uses native Windows COM objects which handle the secure channel
+    (LDAP Sign and Seal or RPC encryption) automatically, bypassing the
+    need for the Domain Controller to have an SSL/TLS certificate installed.
+    """
+    import win32com.client
+    import pywintypes
 
-    Active Directory requires a secure connection for unicodePwd modifications.
-    We use plain ldap:// (port 389) and upgrade it via StartTLS, as direct
-    LDAPS (port 636) was resetting the connection. TLS certificate verification
-    is disabled because the internal AD server uses a self-signed / internal CA.
+    dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
+    
+    try:
+        dso = win32com.client.GetObject("LDAP:")
+        # 1 = ADS_SECURE_AUTHENTICATION
+        obj = dso.OpenDSObject(
+            f"LDAP://{dc}/{user_dn}",
+            settings.ldap_admin_user,
+            settings.ldap_admin_password,
+            1,
+        )
+        obj.SetPassword(new_password)
+        return None  # Success
+    except pywintypes.com_error as e:
+        inner_hresult = None
+        if e.excepinfo and len(e.excepinfo) > 5:
+            inner_hresult = e.excepinfo[5]
+
+        if inner_hresult == -2147023570 or e.hresult == -2147023570:  # ERROR_PASSWORD_RESTRICTION
+            return "Password does not meet AD policy requirements (e.g. history, length, complexity)."
+        if inner_hresult == -2147024891 or e.hresult == -2147024891:  # ERROR_ACCESS_DENIED
+            return "Admin account lacks permission to reset passwords."
+            
+        error_msg = e.excepinfo[2] if e.excepinfo and len(e.excepinfo) > 2 else str(e)
+        return f"ADSI Error resetting password: {error_msg}"
+    except Exception as e:
+        return f"Unexpected Error: {str(e)}"
+
+
+def admin_ldap_connection():
+    """Create a standard LDAP connection bound with admin credentials.
+
+    We use plain ldap:// (port 389) for queries. Password resets are handled
+    securely via ADSI (which encrypts automatically via RPC/Sign-and-Seal),
+    bypassing the need for LDAPS or StartTLS on the Domain Controller.
     """
     uri = settings.ldap_uri
 
@@ -471,13 +504,6 @@ def admin_ldap_connection():
     conn.set_option(ldap.OPT_TIMEOUT, settings.ldap_timeout_seconds)
     conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
     conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
-
-    try:
-        # Upgrade connection to TLS on the standard port
-        conn.start_tls_s()
-        logger.info("Successfully upgraded LDAP connection to TLS via StartTLS")
-    except ldap.LDAPError as exc:
-        logger.warning("StartTLS failed (AD might not have a certificate installed): %s", exc)
 
     conn.simple_bind_s(settings.ldap_admin_user, settings.ldap_admin_password)
     return conn
@@ -548,32 +574,14 @@ def reset_password():
 
         user_dn = user_record[0]
 
-        # --- Step 3: Reset the password using admin privileges --------------
-        new_pwd_encoded = _encode_ad_password(new_password)
-        mod_attrs = [(ldap.MOD_REPLACE, "unicodePwd", [new_pwd_encoded])]
-        admin_conn.modify_s(user_dn, mod_attrs)
+        # --- Step 3: Reset the password using ADSI --------------------------
+        error_msg = _reset_password_adsi(user_dn, new_password)
+        if error_msg:
+            return json_error(error_msg, 400)
 
         logger.info("Password successfully reset for %s", username)
         return jsonify({"status": "success", "message": "Password has been reset successfully"})
 
-    except ldap.CONSTRAINT_VIOLATION as exc:
-        # AD returns this when password policy requirements are not met
-        logger.warning("Password policy violation for %s: %s", username, exc)
-        return json_error(
-            "Password does not meet Active Directory policy requirements "
-            "(e.g. history, length, complexity)",
-            400,
-        )
-    except ldap.UNWILLING_TO_PERFORM as exc:
-        logger.warning("AD refused password change for %s: %s", username, exc)
-        return json_error(
-            "Active Directory refused the operation. "
-            "Ensure the server connection is using LDAPS (port 636).",
-            400,
-        )
-    except ldap.INSUFFICIENT_ACCESS:
-        logger.error("Admin account lacks permission to reset password for %s", username)
-        return json_error("Admin account lacks permission to reset passwords", 403)
     except ldap.LDAPError as exc:
         logger.exception("LDAP error during password reset for %s", username)
         return json_error(f"LDAP error: {exc}", 503)
@@ -812,22 +820,14 @@ def forgot_password_reset():
             return json_error("User not found in directory", 404)
 
         user_dn = user_record[0]
-        new_pwd_encoded = _encode_ad_password(new_password)
-        mod_attrs = [(ldap.MOD_REPLACE, "unicodePwd", [new_pwd_encoded])]
-        admin_conn.modify_s(user_dn, mod_attrs)
+        
+        error_msg = _reset_password_adsi(user_dn, new_password)
+        if error_msg:
+            return json_error(error_msg, 400)
 
         logger.info("Password reset via OTP for %s", username)
         return jsonify({"status": "success", "message": "Password reset successfully"})
 
-    except ldap.CONSTRAINT_VIOLATION as exc:
-        logger.warning("Password policy violation for %s: %s", username, exc)
-        return json_error("Password does not meet AD policy requirements", 400)
-    except ldap.UNWILLING_TO_PERFORM as exc:
-        logger.warning("AD refused password change for %s: %s", username, exc)
-        return json_error("AD refused the operation. Ensure LDAPS is configured.", 400)
-    except ldap.INSUFFICIENT_ACCESS:
-        logger.error("Admin lacks permission to reset password for %s", username)
-        return json_error("Admin lacks permission to reset passwords", 403)
     except ldap.LDAPError as exc:
         logger.exception("LDAP error during password reset for %s", username)
         return json_error(f"LDAP error: {exc}", 503)
