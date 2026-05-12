@@ -56,6 +56,10 @@ logged_out_users = set()
 # In-memory OTP store: { username: { otp, email, expires_at, created_at, attempts } }
 otp_store = {}
 
+# In-memory employee directory cache
+_EMP_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
+_emp_cache: dict = {"data": None, "cached_at": 0.0}
+
 DEPARTMENT_MAP = {
     "IT": "Information Technology (IT)",
     "IT-TS": "Information Technology (IT)",
@@ -285,6 +289,16 @@ def emp_data():
     if request.headers.get("Data") != settings.employee_api_key:
         return json_error("invalid request", 401)
 
+    now = time.time()
+
+    # Return cached data if still fresh
+    if _emp_cache["data"] is not None and (now - _emp_cache["cached_at"]) < _EMP_CACHE_TTL:
+        logger.debug("emp_data: serving from cache (age %.0fs)", now - _emp_cache["cached_at"])
+        return jsonify(_emp_cache["data"])
+
+    # Cache is stale or empty — fetch from LDAP
+    logger.info("emp_data: refreshing employee cache from LDAP")
+    connection = None
     try:
         connection = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
         result = connection.search_s(
@@ -295,12 +309,17 @@ def emp_data():
         )
     except ldap.LDAPError as exc:
         logger.exception("Employee LDAP query failed")
+        # Serve stale cache rather than returning an error, if we have any
+        if _emp_cache["data"] is not None:
+            logger.warning("emp_data: LDAP failed, serving stale cache")
+            return jsonify(_emp_cache["data"])
         return json_error(f"LDAP query failed: {exc}", 503)
     finally:
-        try:
-            connection.unbind_s()
-        except Exception:
-            pass
+        if connection:
+            try:
+                connection.unbind_s()
+            except Exception:
+                pass
 
     employees = []
     for dn, attrs in result:
@@ -308,6 +327,12 @@ def emp_data():
             employees.append(format_employee(dn, attrs))
 
     employees.sort(key=lambda item: (item["Department"], item["Name"], item["Emp_id"]))
+
+    # Update cache
+    _emp_cache["data"] = employees
+    _emp_cache["cached_at"] = now
+    logger.info("emp_data: cache updated with %d employees", len(employees))
+
     return jsonify(employees)
 
 
