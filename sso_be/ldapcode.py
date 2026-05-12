@@ -1,10 +1,13 @@
 import datetime as dt
 import logging
 import os
+import random
 import time
 import uuid
 from dataclasses import dataclass
 from functools import wraps
+
+from exchangelib import Account, Configuration, Credentials, DELEGATE, Message, HTMLBody
 
 import jwt
 import ldap
@@ -36,6 +39,12 @@ class Settings:
     ldap_timeout_seconds: int = int(os.getenv("SSO_LDAP_TIMEOUT_SECONDS", "5"))
     cors_origins: str = os.getenv("SSO_CORS_ORIGINS", "*")
     debug: bool = os.getenv("SSO_DEBUG", "false").lower() == "true"
+    mail_server: str = os.getenv("SSO_MAIL_SERVER", "mail.grid-india.in")
+    mail_user: str = os.getenv("SSO_MAIL_USER", "nldc\\erldcnotifications")
+    mail_password: str = os.getenv("SSO_MAIL_PASSWORD", "Sanju@761977!")
+    mail_from: str = os.getenv("SSO_MAIL_FROM", "erldcnotifications@grid-india.in")
+    otp_expiry_seconds: int = int(os.getenv("SSO_OTP_EXPIRY_SECONDS", "600"))
+    otp_cooldown_seconds: int = int(os.getenv("SSO_OTP_COOLDOWN_SECONDS", "60"))
 
 
 settings = Settings()
@@ -43,6 +52,9 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": settings.cors_origins}})
 
 logged_out_users = set()
+
+# In-memory OTP store: { username: { otp, email, expires_at, created_at, attempts } }
+otp_store = {}
 
 DEPARTMENT_MAP = {
     "IT": "Information Technology (IT)",
@@ -556,6 +568,260 @@ def reset_password():
     except ldap.INSUFFICIENT_ACCESS:
         logger.error("Admin account lacks permission to reset password for %s", username)
         return json_error("Admin account lacks permission to reset passwords", 403)
+    except ldap.LDAPError as exc:
+        logger.exception("LDAP error during password reset for %s", username)
+        return json_error(f"LDAP error: {exc}", 503)
+    finally:
+        if admin_conn:
+            try:
+                admin_conn.unbind_s()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+#  Forgot-password OTP flow
+# ---------------------------------------------------------------------------
+
+
+def _mask_email(email):
+    """Mask an email address for display, e.g. s***a@grid-india.in."""
+    if not email or "@" not in email:
+        return "***@***"
+    local, domain = email.rsplit("@", 1)
+    if len(local) <= 2:
+        masked_local = local[0] + "***"
+    else:
+        masked_local = local[0] + "***" + local[-1]
+    return f"{masked_local}@{domain}"
+
+
+def _generate_otp():
+    """Generate a 6-digit numeric OTP."""
+    return str(random.randint(100000, 999999))
+
+
+def _cleanup_expired_otps():
+    """Remove expired entries from the OTP store."""
+    now = time.time()
+    expired = [u for u, data in otp_store.items() if data["expires_at"] < now]
+    for u in expired:
+        del otp_store[u]
+
+
+def _send_otp_email(to_email, otp_code, username):
+    """Send the OTP code to the user's email via Exchange (exchangelib)."""
+    html_body = (
+        '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:480px;'
+        'margin:0 auto;padding:32px;background:#f8fafc;border-radius:12px;">'
+        '<div style="text-align:center;margin-bottom:24px;">'
+        '<span style="display:inline-block;background:#0f766e;color:#fff;'
+        'font-size:14px;font-weight:700;padding:6px 16px;border-radius:6px;'
+        'letter-spacing:1px;">ERLDC SSO</span></div>'
+        '<h2 style="color:#172033;font-size:20px;margin:0 0 8px;'
+        'text-align:center;">Password Reset OTP</h2>'
+        f'<p style="color:#667085;font-size:14px;text-align:center;'
+        f'margin:0 0 28px;">Use the code below to reset the password for '
+        f'<strong>{username}</strong></p>'
+        '<div style="text-align:center;margin:0 0 28px;">'
+        f'<span style="display:inline-block;font-size:32px;font-weight:800;'
+        f'letter-spacing:8px;color:#0f766e;background:#e0f2f1;'
+        f'padding:14px 28px;border-radius:10px;border:2px dashed #0f766e;">'
+        f'{otp_code}</span></div>'
+        f'<p style="color:#667085;font-size:13px;text-align:center;'
+        f'margin:0 0 6px;">This code expires in '
+        f'<strong>{settings.otp_expiry_seconds // 60} minutes</strong>.</p>'
+        '<p style="color:#98a2b3;font-size:12px;text-align:center;'
+        'margin:24px 0 0;">If you did not request this reset, '
+        'please ignore this email.</p></div>'
+    )
+
+    try:
+        credentials = Credentials(settings.mail_user, settings.mail_password)
+        config = Configuration(
+            server=settings.mail_server, credentials=credentials
+        )
+        account = Account(
+            primary_smtp_address=settings.mail_from,
+            config=config,
+            autodiscover=False,
+            access_type=DELEGATE,
+        )
+        m = Message(
+            account=account,
+            subject=f"ERLDC SSO \u2014 Password Reset OTP (User: {username})",
+            body=HTMLBody(html_body),
+            to_recipients=[to_email],
+        )
+        m.send()
+        logger.info("OTP email sent to %s for user %s", _mask_email(to_email), username)
+        return True
+    except Exception as exc:
+        logger.exception("Failed to send OTP email: %s", exc)
+        return False
+
+
+def _lookup_user_email(username):
+    """Look up the user's email and DN from AD using admin credentials."""
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        safe = escape_filter_chars(username.strip())
+        fltr = f"(userPrincipalName={safe}@{settings.ldap_upn_domain})"
+        result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_SUBTREE, fltr,
+            ["mail", "distinguishedName", "cn"],
+        )
+        rec = next((item for item in result if item and item[0]), None)
+        if not rec:
+            return None, None, None
+        dn, attrs = rec
+        email = first_attr(attrs, "mail")
+        name = first_attr(attrs, "cn") or username
+        return dn, email, name
+    except ldap.LDAPError as exc:
+        logger.exception("LDAP lookup failed for %s: %s", username, exc)
+        return None, None, None
+    finally:
+        if conn:
+            try:
+                conn.unbind_s()
+            except Exception:
+                pass
+
+
+@app.route("/forgot-password/send-otp", methods=["POST"])
+def forgot_password_send_otp():
+    """Look up user email in AD and send a 6-digit OTP."""
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    if not username:
+        return json_error("Username is required", 400)
+
+    _cleanup_expired_otps()
+
+    existing = otp_store.get(username)
+    if existing:
+        elapsed = time.time() - existing["created_at"]
+        if elapsed < settings.otp_cooldown_seconds:
+            remaining = int(settings.otp_cooldown_seconds - elapsed)
+            return json_error(
+                f"Please wait {remaining}s before requesting another OTP", 429
+            )
+
+    dn, email, display_name = _lookup_user_email(username)
+    if not dn:
+        return json_error("User not found in directory", 404)
+    if not email:
+        return json_error("No email registered for this user. Contact admin.", 400)
+
+    otp_code = _generate_otp()
+    otp_store[username] = {
+        "otp": otp_code, "email": email, "dn": dn,
+        "display_name": display_name,
+        "expires_at": time.time() + settings.otp_expiry_seconds,
+        "created_at": time.time(), "attempts": 0,
+    }
+
+    if not _send_otp_email(email, otp_code, username):
+        del otp_store[username]
+        return json_error("Failed to send OTP email. Try again later.", 503)
+
+    logger.info("OTP generated for %s, sent to %s", username, _mask_email(email))
+    return jsonify({
+        "status": "otp_sent",
+        "masked_email": _mask_email(email),
+        "expires_in": settings.otp_expiry_seconds,
+    })
+
+
+@app.route("/forgot-password/verify-otp", methods=["POST"])
+def forgot_password_verify_otp():
+    """Verify the OTP and return a short-lived reset token."""
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    otp_input = str(body.get("otp", "")).strip()
+    if not username or not otp_input:
+        return json_error("Username and OTP are required", 400)
+
+    entry = otp_store.get(username)
+    if not entry:
+        return json_error("No OTP found. Please request a new one.", 400)
+    if time.time() > entry["expires_at"]:
+        del otp_store[username]
+        return json_error("OTP has expired. Please request a new one.", 400)
+
+    entry["attempts"] += 1
+    if entry["attempts"] > 5:
+        del otp_store[username]
+        return json_error("Too many failed attempts. Request a new OTP.", 429)
+
+    if entry["otp"] != otp_input:
+        remaining = 5 - entry["attempts"]
+        return json_error(f"Invalid OTP. {remaining} attempt(s) remaining.", 400)
+
+    reset_payload = {
+        "username": username, "purpose": "password_reset",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 300,
+        "jti": uuid.uuid4().hex,
+    }
+    reset_token = encode_token(reset_payload, settings.login_token_secret)
+    del otp_store[username]
+
+    logger.info("OTP verified for %s, reset token issued", username)
+    return jsonify({"status": "verified", "reset_token": reset_token})
+
+
+@app.route("/forgot-password/reset", methods=["POST"])
+def forgot_password_reset():
+    """Reset the password using the verified reset token."""
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    reset_token = str(body.get("reset_token", "")).strip()
+    new_password = str(body.get("new_password", ""))
+
+    if not username or not reset_token or not new_password:
+        return json_error("username, reset_token, and new_password required", 400)
+
+    try:
+        td = jwt.decode(reset_token, settings.login_token_secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return json_error("Reset token expired. Please start over.", 401)
+    except jwt.InvalidTokenError:
+        return json_error("Invalid reset token", 401)
+
+    if td.get("purpose") != "password_reset" or td.get("username") != username:
+        return json_error("Invalid reset token", 401)
+
+    strength_error = _validate_password_strength(new_password)
+    if strength_error:
+        return json_error(strength_error, 400)
+
+    admin_conn = None
+    try:
+        admin_conn = admin_ldap_connection()
+        user_record = search_user(admin_conn, username)
+        if not user_record:
+            return json_error("User not found in directory", 404)
+
+        user_dn = user_record[0]
+        new_pwd_encoded = _encode_ad_password(new_password)
+        mod_attrs = [(ldap.MOD_REPLACE, "unicodePwd", [new_pwd_encoded])]
+        admin_conn.modify_s(user_dn, mod_attrs)
+
+        logger.info("Password reset via OTP for %s", username)
+        return jsonify({"status": "success", "message": "Password reset successfully"})
+
+    except ldap.CONSTRAINT_VIOLATION as exc:
+        logger.warning("Password policy violation for %s: %s", username, exc)
+        return json_error("Password does not meet AD policy requirements", 400)
+    except ldap.UNWILLING_TO_PERFORM as exc:
+        logger.warning("AD refused password change for %s: %s", username, exc)
+        return json_error("AD refused the operation. Ensure LDAPS is configured.", 400)
+    except ldap.INSUFFICIENT_ACCESS:
+        logger.error("Admin lacks permission to reset password for %s", username)
+        return json_error("Admin lacks permission to reset passwords", 403)
     except ldap.LDAPError as exc:
         logger.exception("LDAP error during password reset for %s", username)
         return json_error(f"LDAP error: {exc}", 503)
