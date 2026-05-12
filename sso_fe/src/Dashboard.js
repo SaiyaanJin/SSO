@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import AppCard from "./AppCard.js";
 import { Button } from "primereact/button";
+import { FilterMatchMode } from "primereact/api";
+import { DataTable } from "primereact/datatable";
+import { Column } from "primereact/column";
+import { Dialog } from "primereact/dialog";
+import { InputText } from "primereact/inputtext";
 import { jwtDecode as jwt_decode } from "jwt-decode";
 import GILogo from "./staticFiles/GILogo.png";
 import "./cssFiles/ButtonDemo.css";
@@ -238,6 +243,49 @@ export default function Dashboard() {
 	const [sessionExpiresAt, setSessionExpiresAt] = useState(null);
 	const [now, setNow] = useState(() => new Date());
 
+	// Employee Directory States
+	const [showEmpDirectory, setShowEmpDirectory] = useState(false);
+	const [empData, setEmpData] = useState([]);
+	const [filters, setFilters] = useState({
+		global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+	});
+	const [globalFilterValue, setGlobalFilterValue] = useState("");
+
+	const fetchEmpData = () => {
+		setShowEmpDirectory(true);
+		axios
+			.get("https://sso.erldc.in:5000/emp_data", {
+				headers: { Data: "Sanju8@92" },
+			})
+			.then((res) => {
+				setEmpData(res.data);
+			})
+			.catch((err) => {
+				console.error("Failed to fetch emp_data", err);
+			});
+	};
+
+	const onGlobalFilterChange = (e) => {
+		const value = e.target.value;
+		let _filters = { ...filters };
+		_filters["global"].value = value;
+		setFilters(_filters);
+		setGlobalFilterValue(value);
+	};
+
+	const header = (
+		<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+			<span className="p-input-icon-left">
+				<i className="pi pi-search" />
+				<InputText
+					value={globalFilterValue}
+					onChange={onGlobalFilterChange}
+					placeholder="Search Personnel"
+				/>
+			</span>
+		</div>
+	);
+
 	const onClickLogout = useCallback(() => {
 		axios
 			.post("https://sso.erldc.in:5000/logout", {
@@ -385,6 +433,14 @@ export default function Dashboard() {
 					<span>ERLDC SSO</span>
 				</div>
 				<div className="dashboard-nav__actions">
+					<button
+						type="button"
+						className="nav-dir-btn"
+						onClick={fetchEmpData}
+					>
+						<i className="pi pi-address-book" aria-hidden="true" />
+						<span>Employee Directory</span>
+					</button>
 					<a href="#applications">Applications</a>
 					<a href="#quick-links">Quick Links</a>
 					<Button
@@ -519,6 +575,124 @@ export default function Dashboard() {
 						<p>No applications found</p>
 					</div>
 				)}
+
+				<Dialog
+					header={
+						<div className="emp-dir-dialog-header">
+							<span className="emp-dir-dialog-header__icon">
+								<i className="pi pi-address-book" />
+							</span>
+							<div>
+								<p className="emp-dir-dialog-header__eyebrow">ERLDC, Grid India</p>
+								<h2 className="emp-dir-dialog-header__title">Employee Directory</h2>
+							</div>
+							{empData.length > 0 && (
+								<span className="emp-dir-count-badge">
+									{empData.length} Personnel
+								</span>
+							)}
+						</div>
+					}
+					visible={showEmpDirectory}
+					style={{ width: '88vw', maxWidth: '1280px', height: '100vh' }}
+					maximizable
+					modal
+					className="emp-dir-dialog"
+					onHide={() => setShowEmpDirectory(false)}
+				>
+					<DataTable
+						filters={filters}
+						globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile"]}
+						header={
+							<div className="emp-dir-table-toolbar">
+								<span className="emp-dir-search-wrap">
+									<i className="pi pi-search" />
+									<InputText
+										value={globalFilterValue}
+										onChange={onGlobalFilterChange}
+										placeholder="Search by name, ID, department, email…"
+										className="emp-dir-search-input"
+									/>
+								</span>
+							</div>
+						}
+						emptyMessage={
+							<div className="emp-dir-empty">
+								<i className="pi pi-search" />
+								<p>No personnel match your search criteria.</p>
+							</div>
+						}
+						rows={12}
+						paginator
+						rowsPerPageOptions={[10, 25, 50]}
+						scrollable
+						scrollHeight="flex"
+						value={empData}
+						stripedRows
+						showGridlines
+						className="emp-dir-table"
+						sortMode="multiple"
+					>
+						<Column
+							header="#"
+							body={(_, opts) => <span className="emp-dir-row-num">{opts.rowIndex + 1}</span>}
+							style={{ width: '3.5rem', textAlign: 'center' }}
+						/>
+						<Column
+							field="Department"
+							header="Department"
+							style={{ width: '20%' }}
+							sortable
+							body={(rowData) => (
+								<span className="emp-dir-dept-badge">{rowData.Department}</span>
+							)}
+						/>
+						<Column
+							field="Name"
+							header="Employee Name"
+							style={{ width: '20%' }}
+							sortable
+							body={(rowData) => (
+								<span className="emp-dir-name">
+									<i className="pi pi-user" />
+									{rowData.Name}
+								</span>
+							)}
+						/>
+						<Column
+							field="Emp_id"
+							header="Employee ID"
+							style={{ width: '12%' }}
+							sortable
+							body={(rowData) => (
+								<code className="emp-dir-empid">{rowData.Emp_id}</code>
+							)}
+						/>
+						<Column
+							field="Mail"
+							header="E-Mail Address"
+							style={{ width: '25%' }}
+							sortable
+							body={(rowData) => (
+								<a href={`mailto:${rowData.Mail}`} className="emp-dir-mail-link">
+									<i className="pi pi-envelope" />
+									{rowData.Mail}
+								</a>
+							)}
+						/>
+						<Column
+							field="Mobile"
+							header="Contact Number"
+							style={{ width: '15%' }}
+							body={(rowData) => (
+								<span className="emp-dir-phone">
+									<i className="pi pi-phone" />
+									{rowData.Mobile}
+								</span>
+							)}
+						/>
+					</DataTable>
+				</Dialog>
 			</section>
 		</main>
 	);
