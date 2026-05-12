@@ -45,6 +45,7 @@ export default function ResetPassword() {
 	const [maskedEmail, setMaskedEmail] = useState("");
 	const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
 	const [countdown, setCountdown] = useState(0);
+	const [isFallbackEmail, setIsFallbackEmail] = useState(false);
 	const otpRefs = useRef([]);
 	const timerRef = useRef(null);
 
@@ -74,6 +75,7 @@ export default function ResetPassword() {
 				username: username.trim(),
 			});
 			setMaskedEmail(res.data.masked_email);
+			setIsFallbackEmail(!!res.data.note);
 			startCountdown(res.data.expires_in || 600);
 			setOtp(Array(OTP_LENGTH).fill(""));
 			setStep(2);
@@ -323,6 +325,23 @@ export default function ResetPassword() {
 								{maskedEmail}
 							</div>
 						</div>
+
+						{isFallbackEmail && (
+							<div className="otp-fallback-notice" role="alert">
+								<div className="otp-fallback-notice__icon">
+									<i className="pi pi-exclamation-triangle" aria-hidden="true" />
+								</div>
+								<div className="otp-fallback-notice__body">
+									<strong>Email ID not found</strong>
+									<p>
+										Your email ID is not registered in the employee directory.
+										The OTP has been sent to the IT helpdesk. Please contact
+										any IT personnel to obtain the OTP, and also request
+										them to register your email ID in the system.
+									</p>
+								</div>
+							</div>
+						)}
 
 						<form className="reset-form" onSubmit={handleVerifyOtp}>
 							<div className="otp-inputs" onPaste={handleOtpPaste}>

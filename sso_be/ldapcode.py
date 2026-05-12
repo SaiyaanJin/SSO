@@ -732,8 +732,17 @@ def forgot_password_send_otp():
     dn, email, display_name = _lookup_user_email(username)
     if not dn:
         return json_error("User not found in directory", 404)
+
+    # If no email is registered for the user, fall back to the IT helpdesk address
+    FALLBACK_EMAIL = "erldcitgr@grid-india.in"
+    is_fallback = False
     if not email:
-        return json_error("No email registered for this user. Contact admin.", 400)
+        logger.warning(
+            "No email found for user %s – OTP will be sent to fallback address %s",
+            username, FALLBACK_EMAIL,
+        )
+        email = FALLBACK_EMAIL
+        is_fallback = True
 
     otp_code = _generate_otp()
     otp_store[username] = {
@@ -741,6 +750,7 @@ def forgot_password_send_otp():
         "display_name": display_name,
         "expires_at": time.time() + settings.otp_expiry_seconds,
         "created_at": time.time(), "attempts": 0,
+        "is_fallback": is_fallback,
     }
 
     if not _send_otp_email(email, otp_code, username):
@@ -752,6 +762,7 @@ def forgot_password_send_otp():
         "status": "otp_sent",
         "masked_email": _mask_email(email),
         "expires_in": settings.otp_expiry_seconds,
+        **({"note": "No registered email found. OTP sent to IT helpdesk."} if is_fallback else {}),
     })
 
 
