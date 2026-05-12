@@ -452,14 +452,28 @@ def _validate_password_strength(password):
 
 
 def admin_ldap_connection():
-    """Create an LDAP connection bound with admin credentials.
+    """Create an LDAPS connection bound with admin credentials.
 
-    Note: Active Directory typically requires LDAPS for unicodePwd changes.
-    If the server rejects the modify, it will return UNWILLING_TO_PERFORM
-    which is handled by the caller. To enable LDAPS, set SSO_LDAP_URI
-    to ldaps://your-server.
+    Active Directory requires LDAPS (port 636) for unicodePwd modifications.
+    TLS certificate verification is disabled because the internal AD server
+    uses a self-signed / internal CA certificate.
     """
-    return ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+    uri = settings.ldap_uri
+    if uri.startswith("ldap://"):
+        uri = uri.replace("ldap://", "ldaps://", 1)
+
+    # Disable TLS cert verification globally before initializing
+    ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+
+    conn = ldap.initialize(uri)
+    conn.protocol_version = ldap.VERSION3
+    conn.set_option(ldap.OPT_REFERRALS, 0)
+    conn.set_option(ldap.OPT_NETWORK_TIMEOUT, settings.ldap_timeout_seconds)
+    conn.set_option(ldap.OPT_TIMEOUT, settings.ldap_timeout_seconds)
+    conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+    conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+    conn.simple_bind_s(settings.ldap_admin_user, settings.ldap_admin_password)
+    return conn
 
 
 @app.route("/reset-password", methods=["POST"])
