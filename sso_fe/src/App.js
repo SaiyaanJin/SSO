@@ -2,6 +2,7 @@ import * as React from "react";
 import { Routes, Route } from "react-router-dom";
 import LoginApp from "./LoginPage.js";
 import Dashboard from "./Dashboard.js";
+import ResetPassword from "./ResetPassword.js";
 import "./App.css";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
 			<Routes>
 				<Route path="/" element={<LoginApp />} />
 				<Route path="dashboard" element={<Dashboard />} />
+				<Route path="reset-password" element={<ResetPassword />} />
 			</Routes>
 		</div>
 	);

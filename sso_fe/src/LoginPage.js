@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import GILogo from "./staticFiles/GILogo.png";
 import SSOBack from "./staticFiles/SSO_back.png";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -144,6 +144,12 @@ function LoginApp() {
 									aria-hidden="true"
 								/>
 							</button>
+						</div>
+
+						<div className="login-forgot-row">
+							<Link to="/reset-password" className="login-forgot-link">
+								Forgot Password?
+							</Link>
 						</div>
 
 						{errorMessage && (

@@ -285,6 +285,34 @@ html[data-theme="dark"] .login-error {
 	color: #fda4af !important;
 }
 
+.login-forgot-row {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 2px;
+}
+
+.login-forgot-link {
+	color: #0f766e;
+	font-size: 0.84rem;
+	font-weight: 750;
+	text-decoration: none;
+	transition: color 160ms ease, transform 160ms ease;
+}
+
+.login-forgot-link:hover {
+	color: #0d9488;
+	text-decoration: underline;
+	transform: translateX(2px);
+}
+
+html[data-theme="dark"] .login-forgot-link {
+	color: #2dd4bf;
+}
+
+html[data-theme="dark"] .login-forgot-link:hover {
+	color: #5eead4;
+}
+
 .login-submit {
 	display: inline-flex;
 	align-items: center;

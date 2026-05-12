@@ -454,27 +454,12 @@ def _validate_password_strength(password):
 def admin_ldap_connection():
     """Create an LDAP connection bound with admin credentials.
 
-    Uses LDAPS (or StartTLS) which is required by Active Directory
-    for password modification operations.
+    Note: Active Directory typically requires LDAPS for unicodePwd changes.
+    If the server rejects the modify, it will return UNWILLING_TO_PERFORM
+    which is handled by the caller. To enable LDAPS, set SSO_LDAP_URI
+    to ldaps://your-server.
     """
-    uri = settings.ldap_uri
-    # For password resets AD requires a secure connection.
-    # If the configured URI is plain ldap://, attempt ldaps:// on port 636.
-    if uri.startswith("ldap://"):
-        secure_uri = uri.replace("ldap://", "ldaps://", 1)
-        logger.info("Upgrading LDAP URI to secure: %s -> %s", uri, secure_uri)
-        uri = secure_uri
-
-    conn = ldap.initialize(uri)
-    conn.protocol_version = ldap.VERSION3
-    conn.set_option(ldap.OPT_REFERRALS, 0)
-    conn.set_option(ldap.OPT_NETWORK_TIMEOUT, settings.ldap_timeout_seconds)
-    conn.set_option(ldap.OPT_TIMEOUT, settings.ldap_timeout_seconds)
-    # In lab / internal CA environments you may need to skip TLS verification:
-    # conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
-    # conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
-    conn.simple_bind_s(settings.ldap_admin_user, settings.ldap_admin_password)
-    return conn
+    return ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
 
 
 @app.route("/reset-password", methods=["POST"])
