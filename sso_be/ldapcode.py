@@ -452,15 +452,14 @@ def _validate_password_strength(password):
 
 
 def admin_ldap_connection():
-    """Create an LDAPS connection bound with admin credentials.
+    """Create a secure LDAP connection bound with admin credentials.
 
-    Active Directory requires LDAPS (port 636) for unicodePwd modifications.
-    TLS certificate verification is disabled because the internal AD server
-    uses a self-signed / internal CA certificate.
+    Active Directory requires a secure connection for unicodePwd modifications.
+    We use plain ldap:// (port 389) and upgrade it via StartTLS, as direct
+    LDAPS (port 636) was resetting the connection. TLS certificate verification
+    is disabled because the internal AD server uses a self-signed / internal CA.
     """
     uri = settings.ldap_uri
-    if uri.startswith("ldap://"):
-        uri = uri.replace("ldap://", "ldaps://", 1)
 
     # Disable TLS cert verification globally before initializing
     ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
@@ -472,6 +471,14 @@ def admin_ldap_connection():
     conn.set_option(ldap.OPT_TIMEOUT, settings.ldap_timeout_seconds)
     conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
     conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+
+    try:
+        # Upgrade connection to TLS on the standard port
+        conn.start_tls_s()
+        logger.info("Successfully upgraded LDAP connection to TLS via StartTLS")
+    except ldap.LDAPError as exc:
+        logger.warning("StartTLS failed (AD might not have a certificate installed): %s", exc)
+
     conn.simple_bind_s(settings.ldap_admin_user, settings.ldap_admin_password)
     return conn
 
