@@ -966,21 +966,67 @@ def _delete_user_adsi(user_dn):
         pythoncom.CoUninitialize()
 
 def _modify_user_adsi(user_dn, updates):
+    """Modify non-RDN attributes on a user object via ADSI.
+    Note: 'cn' is the RDN attribute and must NOT be in updates - use _rename_user_adsi instead.
+    """
     import pythoncom
     pythoncom.CoInitialize()
     try:
         obj = _get_adsi_container(user_dn)
         for key, value in updates.items():
+            if key == "cn":
+                continue  # Cannot set RDN via Put — use _rename_user_adsi
             if value:
                 obj.Put(key, value)
             else:
-                obj.PutEx(1, key, 0) # 1 = ADS_PROPERTY_CLEAR
+                obj.PutEx(1, key, 0)  # 1 = ADS_PROPERTY_CLEAR
         obj.SetInfo()
         return None
     except Exception as e:
         return f"Failed to modify user: {str(e)}"
     finally:
         pythoncom.CoUninitialize()
+
+def _rename_user_adsi(user_dn, new_name):
+    """Rename a user object in AD by moving it to a new CN.
+    This uses ADSI MoveHere which is the correct way to change the RDN (cn) of an object.
+    Also updates the displayName and givenName attributes to match.
+    """
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
+        parent_dn = user_dn.split(",", 1)[1]
+        parent_url = f"LDAP://{dc}/{parent_dn}"
+
+        import win32com.client
+        dso = win32com.client.GetObject("LDAP:")
+        parent_obj = dso.OpenDSObject(
+            parent_url,
+            settings.ldap_admin_user,
+            settings.ldap_admin_password,
+            1,
+        )
+        # MoveHere renames within the same container
+        parent_obj.MoveHere(f"LDAP://{dc}/{user_dn}", f"CN={new_name}")
+
+        # Now update displayName and givenName on the renamed object
+        new_dn = f"CN={new_name},{parent_dn}"
+        renamed_obj = dso.OpenDSObject(
+            f"LDAP://{dc}/{new_dn}",
+            settings.ldap_admin_user,
+            settings.ldap_admin_password,
+            1,
+        )
+        renamed_obj.Put("displayName", new_name)
+        renamed_obj.SetInfo()
+
+        return None, new_dn  # Return success and the updated DN
+    except Exception as e:
+        return f"Failed to rename user: {str(e)}", None
+    finally:
+        pythoncom.CoUninitialize()
+
 
 def _toggle_user_status_adsi(user_dn, enable):
     import pythoncom
@@ -1072,16 +1118,28 @@ def admin_modify_user(username):
         if not rec:
             return json_error("User not found", 404)
         dn = rec[0]
-        
-        updates = {}
-        if "name" in body: updates["cn"] = body["name"]
-        if "email" in body: updates["mail"] = body["email"]
-        if "phone" in body: updates["telephoneNumber"] = body["phone"]
-        
-        if updates:
-            error_msg = _modify_user_adsi(dn, updates)
-            if error_msg: return json_error(error_msg, 500)
-            
+
+        # Step 1: Rename (change CN/displayName) if name was provided
+        # cn is the RDN — must use MoveHere, not Put
+        new_name = str(body.get("name", "")).strip()
+        if new_name:
+            rename_error, new_dn = _rename_user_adsi(dn, new_name)
+            if rename_error:
+                return json_error(rename_error, 500)
+            dn = new_dn  # Use updated DN for subsequent attribute updates
+
+        # Step 2: Update non-RDN attributes (email, phone)
+        attr_updates = {}
+        if "email" in body:
+            attr_updates["mail"] = body["email"]
+        if "phone" in body:
+            attr_updates["telephoneNumber"] = body["phone"]
+
+        if attr_updates:
+            error_msg = _modify_user_adsi(dn, attr_updates)
+            if error_msg:
+                return json_error(error_msg, 500)
+
         return jsonify({"status": "success", "message": "User modified successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)

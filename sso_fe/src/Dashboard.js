@@ -435,14 +435,26 @@ export default function Dashboard() {
 					<span>ERLDC SSO</span>
 				</div>
 				<div className="dashboard-nav__actions">
-					<button
-						type="button"
-						className="nav-dir-btn"
-						onClick={fetchEmpData}
-					>
-						<i className="pi pi-address-book" aria-hidden="true" />
-						<span>Employee Directory</span>
-					</button>
+					{userDepartment === "Information Technology (IT)" && (
+					<>
+						<button
+							type="button"
+							className="nav-dir-btn nav-admin-btn"
+							onClick={() => navigate("/admin")}
+						>
+							<i className="pi pi-shield" aria-hidden="true" />
+							<span>Admin Console</span>
+						</button>
+						<button
+							type="button"
+							className="nav-dir-btn"
+							onClick={fetchEmpData}
+						>
+							<i className="pi pi-address-book" aria-hidden="true" />
+							<span>Employee Directory</span>
+						</button>
+					</>
+				)}
 					<a href="#applications">Applications</a>
 					<a href="#quick-links">Quick Links</a>
 					<Button
