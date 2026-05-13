@@ -364,7 +364,7 @@ def token():
             return invalid_login_token(username, "User not found")
 
         dn, attrs = user_record
-        department = organizational_unit_from_dn(dn)
+        department = department_name_from_dn(dn)
         person_name = first_attr(attrs, "cn") or dn.split(",", 1)[0][3:]
         payload = make_login_payload(True, username, department, person_name)
         logged_out_users.discard(username)
