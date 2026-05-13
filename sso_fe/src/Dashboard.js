@@ -241,6 +241,7 @@ export default function Dashboard() {
 	const [activeCategory, setActiveCategory] = useState("All");
 	const [isCheckingSession, setIsCheckingSession] = useState(true);
 	const [sessionExpiresAt, setSessionExpiresAt] = useState(null);
+	const [userDepartment, setUserDepartment] = useState(null);
 	const [now, setNow] = useState(() => new Date());
 
 	// Employee Directory States
@@ -322,6 +323,7 @@ export default function Dashboard() {
 				return;
 			}
 
+			setUserDepartment(decoded.Department);
 			setSessionExpiresAt(expiresAt);
 			setIsCheckingSession(false);
 		} catch (error) {
@@ -433,14 +435,16 @@ export default function Dashboard() {
 					<span>ERLDC SSO</span>
 				</div>
 				<div className="dashboard-nav__actions">
-					<button
-						type="button"
-						className="nav-dir-btn"
-						onClick={fetchEmpData}
-					>
-						<i className="pi pi-address-book" aria-hidden="true" />
-						<span>Employee Directory</span>
-					</button>
+					{userDepartment === "Information Technology (IT)" && (
+						<button
+							type="button"
+							className="nav-dir-btn"
+							onClick={fetchEmpData}
+						>
+							<i className="pi pi-address-book" aria-hidden="true" />
+							<span>Employee Directory</span>
+						</button>
+					)}
 					<a href="#applications">Applications</a>
 					<a href="#quick-links">Quick Links</a>
 					<Button

@@ -759,7 +759,7 @@ def forgot_password_send_otp():
         return json_error("User not found in directory", 404)
 
     # If no email is registered for the user, fall back to the IT helpdesk address
-    FALLBACK_EMAIL = "erldcitgr@grid-india.in"
+    FALLBACK_EMAIL = "erldcit@grid-india.in"
     is_fallback = False
     if not email:
         logger.warning(
