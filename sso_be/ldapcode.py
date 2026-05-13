@@ -80,6 +80,20 @@ DEPARTMENT_MAP = {
     "F&A": "Finance & Accounts (F&A)",
 }
 
+# Reverse map: full department name -> primary OU code used when moving a user
+DEPT_TO_OU = {
+    "Information Technology (IT)": "IT",
+    "Market Operation (MO)": "MO",
+    "System Operation (SO)": "SO",
+    "Control Room (CR)": "CR",
+    "SCADA": "SCADA",
+    "Contracts & Services (CS)": "CS",
+    "Technical Services (TS)": "TS",
+    "Human Resource (HR)": "HR",
+    "Communication": "COMMUNICATION",
+    "Finance & Accounts (F&A)": "F&A",
+}
+
 SERVICE_ACCOUNTS = {
     "raju",
     "pritam",
@@ -1028,6 +1042,40 @@ def _rename_user_adsi(user_dn, new_name):
         pythoncom.CoUninitialize()
 
 
+def _move_user_to_dept_adsi(user_dn, dept_ou_code):
+    """Move a user to a different OU (department) in AD using ADSI MoveHere.
+    dept_ou_code should be the OU name, e.g. 'IT', 'HR', 'MO'.
+    Returns (error_string_or_None, new_dn_or_None).
+    """
+    import pythoncom
+    import win32com.client
+    pythoncom.CoInitialize()
+    try:
+        dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
+        # Build target OU DN: OU=<code>,DC=erldc,DC=net
+        target_ou_dn = f"OU={dept_ou_code},{settings.ldap_base_dn}"
+        target_ou_url = f"LDAP://{dc}/{target_ou_dn}"
+
+        # Get the CN portion of the current user DN
+        cn_part = user_dn.split(",", 1)[0]  # e.g. 'CN=John Doe'
+
+        dso = win32com.client.GetObject("LDAP:")
+        target_container = dso.OpenDSObject(
+            target_ou_url,
+            settings.ldap_admin_user,
+            settings.ldap_admin_password,
+            1,
+        )
+        target_container.MoveHere(f"LDAP://{dc}/{user_dn}", cn_part)
+
+        new_dn = f"{cn_part},{target_ou_dn}"
+        return None, new_dn
+    except Exception as e:
+        return f"Failed to move user to department: {str(e)}", None
+    finally:
+        pythoncom.CoUninitialize()
+
+
 def _toggle_user_status_adsi(user_dn, enable):
     import pythoncom
     pythoncom.CoInitialize()
@@ -1126,9 +1174,19 @@ def admin_modify_user(username):
             rename_error, new_dn = _rename_user_adsi(dn, new_name)
             if rename_error:
                 return json_error(rename_error, 500)
+            dn = new_dn  # Use updated DN for subsequent operations
+
+        # Step 2: Move to a different department (OU) if requested
+        new_dept = str(body.get("department", "")).strip()
+        if new_dept:
+            # Accept either full name ("Information Technology (IT)") or OU code ("IT")
+            ou_code = DEPT_TO_OU.get(new_dept, new_dept)
+            move_error, new_dn = _move_user_to_dept_adsi(dn, ou_code)
+            if move_error:
+                return json_error(move_error, 500)
             dn = new_dn  # Use updated DN for subsequent attribute updates
 
-        # Step 2: Update non-RDN attributes (email, phone)
+        # Step 3: Update non-RDN attributes (email, phone)
         attr_updates = {}
         if "email" in body:
             attr_updates["mail"] = body["email"]

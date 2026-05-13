@@ -98,7 +98,16 @@ export default function AdminConsole() {
 
 	const openEditUser = (user) => {
 		setIsEdit(true); setSelectedUser(user);
-		setFormData({ ...EMPTY_FORM, username: user.Emp_id, name: user.Name, email: user.Mail, phone: user.Mobile });
+		// Pre-populate department: match the user's displayed department name to a DEPARTMENTS value
+		const deptEntry = DEPARTMENTS.find(d => d.label === user.Department);
+		setFormData({
+			...EMPTY_FORM,
+			username: user.Emp_id,
+			name: user.Name,
+			email: user.Mail,
+			phone: user.Mobile,
+			department: deptEntry ? deptEntry.value : "",
+		});
 		setUserDialog(true);
 	};
 
@@ -371,12 +380,10 @@ export default function AdminConsole() {
 					<label>Username / Employee ID *</label>
 					<InputText value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} disabled={isEdit} placeholder="e.g. 10045" />
 				</div>
-				{!isEdit && (
-					<div className="admin-field">
-						<label>Department</label>
-						<Dropdown value={formData.department} options={DEPARTMENTS} onChange={e => setFormData({ ...formData, department: e.value })} placeholder="Select a Department" />
-					</div>
-				)}
+				<div className="admin-field">
+					<label>Department {isEdit && <span style={{ color: '#64748b', fontWeight: 400, textTransform: 'none', fontSize: '0.78rem' }}>(changing moves user to new OU)</span>}</label>
+					<Dropdown value={formData.department} options={DEPARTMENTS} onChange={e => setFormData({ ...formData, department: e.value })} placeholder="Select a Department" />
+				</div>
 				<div className="admin-field">
 					<label>Email Address</label>
 					<InputText type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="e.g. user@grid-india.in" />
