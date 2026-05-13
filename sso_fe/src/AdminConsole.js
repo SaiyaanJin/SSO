@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
@@ -8,6 +8,7 @@ import { Button } from "primereact/button";
 import { Dialog } from "primereact/dialog";
 import { InputText } from "primereact/inputtext";
 import { Dropdown } from "primereact/dropdown";
+import { Menu } from "primereact/menu";
 import { FilterMatchMode } from "primereact/api";
 import GILogo from "./staticFiles/GILogo.png";
 import "./AdminConsole.css";
@@ -227,45 +228,74 @@ export default function AdminConsole() {
 		);
 	};
 
-	const actionBody = (rowData) => {
-		const isActive = rowData.Status === "Active";
-		return (
-			<div className="action-cell">
-				<Button
-					icon="pi pi-pencil"
-					className="p-button-rounded p-button-text p-button-secondary"
-					tooltip="Edit User" tooltipOptions={{ position: "top" }}
-					onClick={() => openEditUser(rowData)}
-				/>
-				<Button
-					icon="pi pi-key"
-					className="p-button-rounded p-button-text p-button-warning"
-					tooltip="Reset Password" tooltipOptions={{ position: "top" }}
-					onClick={() => openResetPwd(rowData)}
-				/>
-				{rowData.Locked && (
-					<Button
-						icon="pi pi-lock-open"
-						className="p-button-rounded p-button-text p-button-info"
-						tooltip="Unlock Account" tooltipOptions={{ position: "top" }}
-						onClick={() => openUnlockDialog(rowData)}
-					/>
-				)}
-				<Button
-					icon={isActive ? "pi pi-lock" : "pi pi-unlock"}
-					className={`p-button-rounded p-button-text ${isActive ? "p-button-danger" : "p-button-success"}`}
-					tooltip={isActive ? "Disable Account" : "Enable Account"} tooltipOptions={{ position: "top" }}
-					onClick={() => toggleStatus(rowData)}
-				/>
-				<Button
-					icon="pi pi-trash"
-					className="p-button-rounded p-button-text p-button-danger"
-					tooltip="Delete User" tooltipOptions={{ position: "top" }}
-					onClick={() => openDelDialog(rowData)}
-				/>
-			</div>
+	// ── Per-row action menu ───────────────────────────────────────────────
+	const actionMenuRef = useRef(null);
+	const [actionMenuRow, setActionMenuRow] = useState(null);
+
+	const buildMenuItems = (row) => {
+		if (!row) return [];
+		const isActive = row.Status === "Active";
+		const items = [
+			{
+				label: "Edit User Details",
+				icon: "pi pi-pencil",
+				command: () => openEditUser(row),
+			},
+			{
+				label: "Reset Password",
+				icon: "pi pi-key",
+				command: () => openResetPwd(row),
+			},
+			{ separator: true },
+		];
+		if (row.Locked) {
+			items.push({
+				label: "Unlock Account",
+				icon: "pi pi-lock-open",
+				className: "action-menu-unlock",
+				command: () => openUnlockDialog(row),
+			});
+		}
+		items.push(
+			{
+				label: isActive ? "Disable Account" : "Enable Account",
+				icon: isActive ? "pi pi-ban" : "pi pi-check-circle",
+				className: isActive ? "action-menu-disable" : "action-menu-enable",
+				command: () => toggleStatus(row),
+			},
+			{ separator: true },
+			{
+				label: "Delete User",
+				icon: "pi pi-trash",
+				className: "action-menu-delete",
+				command: () => openDelDialog(row),
+			}
 		);
+		return items;
 	};
+
+	const actionBody = (rowData) => (
+		<div className="action-cell">
+			<Menu
+				model={actionMenuRow?.Emp_id === rowData.Emp_id ? buildMenuItems(actionMenuRow) : []}
+				popup
+				ref={actionMenuRef}
+				appendTo={document.body}
+				className="admin-action-menu"
+			/>
+			<Button
+				label="Actions"
+				icon="pi pi-chevron-down"
+				iconPos="right"
+				className="admin-action-trigger"
+				onClick={(e) => {
+					setActionMenuRow(rowData);
+					// Give React one tick to update actionMenuRow so model is fresh
+					setTimeout(() => actionMenuRef.current?.toggle(e), 0);
+				}}
+			/>
+		</div>
+	);
 
 	// ── Table toolbar ─────────────────────────────────────────────────────
 	const tableHeader = (
@@ -387,7 +417,7 @@ export default function AdminConsole() {
 					<Column field="Mail"       header="E-Mail Address"  body={mailBody}   sortable style={{ width: "22%" }} />
 					<Column field="Mobile"     header="Phone"           sortable          style={{ width: "12%" }} />
 					<Column field="Status"     header="Status"          body={statusBody} sortable align="center" style={{ width: "10%" }} />
-					<Column header="Actions"   body={actionBody}        align="center"    style={{ width: "160px", minWidth: "160px" }} />
+					<Column header="Actions"   body={actionBody}        align="center"    style={{ width: "130px", minWidth: "130px" }} />
 				</DataTable>
 			</section>
 
