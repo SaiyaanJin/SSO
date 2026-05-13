@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
@@ -230,72 +231,51 @@ export default function AdminConsole() {
 
 	// ── Per-row action menu ───────────────────────────────────────────────
 	const actionMenuRef = useRef(null);
-	const [actionMenuRow, setActionMenuRow] = useState(null);
+	const [menuItems,    setMenuItems]    = useState([]);
 
-	const buildMenuItems = (row) => {
-		if (!row) return [];
-		const isActive = row.Status === "Active";
-		const items = [
-			{
-				label: "Edit User Details",
-				icon: "pi pi-pencil",
-				command: () => openEditUser(row),
-			},
-			{
-				label: "Reset Password",
-				icon: "pi pi-key",
-				command: () => openResetPwd(row),
-			},
-			{ separator: true },
-		];
-		if (row.Locked) {
-			items.push({
-				label: "Unlock Account",
-				icon: "pi pi-lock-open",
-				className: "action-menu-unlock",
-				command: () => openUnlockDialog(row),
-			});
-		}
-		items.push(
-			{
-				label: isActive ? "Disable Account" : "Enable Account",
-				icon: isActive ? "pi pi-ban" : "pi pi-check-circle",
-				className: isActive ? "action-menu-disable" : "action-menu-enable",
-				command: () => toggleStatus(row),
-			},
-			{ separator: true },
-			{
-				label: "Delete User",
-				icon: "pi pi-trash",
-				className: "action-menu-delete",
-				command: () => openDelDialog(row),
-			}
+	const actionBody = (rowData) => {
+		const handleActionsClick = (e) => {
+			const isActive = rowData.Status === "Active";
+			const items = [
+				{ label: "Edit User Details", icon: "pi pi-pencil", command: () => openEditUser(rowData) },
+				{ label: "Reset Password",    icon: "pi pi-key",    command: () => openResetPwd(rowData) },
+				{ separator: true },
+				// Unlock Account — always visible; disabled+greyed when not locked,
+				// amber+clickable when the account is locked out.
+				{
+					label:     "Unlock Account",
+					icon:      "pi pi-lock-open",
+					className: rowData.Locked ? "action-menu-unlock" : "action-menu-unlock-off",
+					disabled:  !rowData.Locked,
+					command:   () => openUnlockDialog(rowData),
+				},
+				{
+					label:     isActive ? "Disable Account" : "Enable Account",
+					icon:      isActive ? "pi pi-ban" : "pi pi-check-circle",
+					className: isActive ? "action-menu-disable" : "action-menu-enable",
+					command:   () => toggleStatus(rowData),
+				},
+				{ separator: true },
+				{ label: "Delete User", icon: "pi pi-trash", className: "action-menu-delete", command: () => openDelDialog(rowData) },
+			];
+
+			// flushSync forces React to update the Menu model synchronously
+			// before .show() reads it, guaranteeing the right items appear.
+			flushSync(() => setMenuItems(items));
+			actionMenuRef.current?.show(e);
+		};
+		return (
+			<div className="action-cell">
+				<Button
+					label="Actions"
+					icon="pi pi-chevron-down"
+					iconPos="right"
+					className="admin-action-trigger"
+					onClick={handleActionsClick}
+				/>
+			</div>
 		);
-		return items;
 	};
-
-	const actionBody = (rowData) => (
-		<div className="action-cell">
-			<Menu
-				model={actionMenuRow?.Emp_id === rowData.Emp_id ? buildMenuItems(actionMenuRow) : []}
-				popup
-				ref={actionMenuRef}
-				appendTo={document.body}
-				className="admin-action-menu"
-			/>
-			<Button
-				label="Actions"
-				icon="pi pi-chevron-down"
-				iconPos="right"
-				className="admin-action-trigger"
-				onClick={(e) => {
-					setActionMenuRow(rowData);
-					// Give React one tick to update actionMenuRow so model is fresh
-					setTimeout(() => actionMenuRef.current?.toggle(e), 0);
-				}}
-			/>
-		</div>
-	);
 
 	// ── Table toolbar ─────────────────────────────────────────────────────
 	const tableHeader = (
@@ -388,6 +368,15 @@ export default function AdminConsole() {
 					</div>
 					<span>{loading ? "" : `${totalUsers} accounts`}</span>
 				</div>
+
+				{/* Single shared popup menu for all action triggers */}
+				<Menu
+					model={menuItems}
+					popup
+					ref={actionMenuRef}
+					appendTo={document.body}
+					className="admin-action-menu"
+				/>
 
 				<DataTable
 					value={users}

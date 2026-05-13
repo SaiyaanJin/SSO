@@ -608,120 +608,189 @@ html[data-theme="dark"] .admin-status-badge.status-locked {
 	color: #fbbf24;
 }
 
-/* Action Buttons */
+/* ── Action cell & dropdown ────────────────────────────────────────── */
 .action-cell {
 	display: flex;
-	gap: 4px;
 	align-items: center;
 	justify-content: center;
+	width: 100%;
 }
 
-/* "Actions ▾" trigger button */
+/* “Actions ▾” trigger button */
 .admin-action-trigger.p-button {
-	background: #f1f5f9 !important;
-	border: 1px solid #cbd5e1 !important;
-	color: #334155 !important;
-	font-size: 0.82rem !important;
-	font-weight: 700 !important;
-	padding: 5px 12px !important;
-	border-radius: 7px !important;
+	display: inline-flex !important;
+	align-items: center !important;
 	gap: 6px !important;
-	box-shadow: 0 1px 3px rgba(15,23,42,0.08) !important;
-	transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease !important;
+	white-space: nowrap !important;
+	background: transparent !important;
+	border: 1px solid #cbd5e1 !important;
+	color: #475569 !important;
+	font-size: 0.80rem !important;
+	font-weight: 700 !important;
+	font-family: inherit !important;
+	letter-spacing: 0.01em !important;
+	padding: 5px 11px !important;
+	border-radius: 7px !important;
+	box-shadow: none !important;
+	text-decoration: none !important;
+	transition: background 130ms ease, border-color 130ms ease, color 130ms ease !important;
 }
 
-.admin-action-trigger.p-button:hover {
-	background: #e2e8f0 !important;
-	border-color: #94a3b8 !important;
-	box-shadow: 0 3px 8px rgba(15,23,42,0.12) !important;
+.admin-action-trigger.p-button:hover,
+.admin-action-trigger.p-button:focus {
+	background: rgba(220,38,38,0.06) !important;
+	border-color: rgba(220,38,38,0.40) !important;
+	color: #dc2626 !important;
+	box-shadow: none !important;
+	outline: none !important;
+}
+
+.admin-action-trigger.p-button:active {
+	background: rgba(220,38,38,0.10) !important;
 }
 
 .admin-action-trigger.p-button .p-button-icon {
-	font-size: 0.72rem !important;
+	font-size: 0.65rem !important;
+	transition: transform 160ms ease !important;
 }
 
 html[data-theme="dark"] .admin-action-trigger.p-button {
-	background: rgba(30,41,59,0.9) !important;
-	border-color: rgba(148,163,184,0.22) !important;
-	color: #cbd5e1 !important;
+	border-color: rgba(148,163,184,0.26) !important;
+	color: #94a3b8 !important;
 }
 
 html[data-theme="dark"] .admin-action-trigger.p-button:hover {
-	background: rgba(51,65,85,0.9) !important;
-	border-color: rgba(148,163,184,0.38) !important;
+	background: rgba(239,68,68,0.08) !important;
+	border-color: rgba(239,68,68,0.42) !important;
+	color: #f87171 !important;
 }
 
-/* Popup menu overrides */
+/* ── Popup menu panel ─────────────────────────────────────────────── */
 .admin-action-menu.p-menu {
-	min-width: 190px !important;
+	width: max-content !important;
+	min-width: 200px !important;
 	border-radius: 10px !important;
 	border: 1px solid rgba(15,23,42,0.10) !important;
-	box-shadow: 0 12px 32px rgba(15,23,42,0.16), 0 2px 6px rgba(15,23,42,0.08) !important;
-	padding: 5px !important;
+	box-shadow:
+		0 4px 6px rgba(15,23,42,0.04),
+		0 12px 36px rgba(15,23,42,0.14),
+		0 2px 8px rgba(15,23,42,0.06) !important;
+	padding: 6px !important;
 	overflow: hidden !important;
+	background: #ffffff !important;
+	animation: menuFadeIn 130ms ease !important;
 }
 
+@keyframes menuFadeIn {
+	from { opacity: 0; transform: translateY(-5px) scale(0.97); }
+	to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* Kill underline on the anchor tag PrimeReact renders */
+.admin-action-menu .p-menuitem-link,
+.admin-action-menu .p-menuitem-link:link,
+.admin-action-menu .p-menuitem-link:visited,
+.admin-action-menu .p-menuitem-link:hover,
+.admin-action-menu .p-menuitem-link:active {
+	text-decoration: none !important;
+}
+
+/* Menu item base */
 .admin-action-menu .p-menuitem-link {
+	display: flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+	width: 100% !important;
+	white-space: nowrap !important;
 	border-radius: 7px !important;
 	padding: 8px 12px !important;
-	font-size: 0.875rem !important;
+	font-family: inherit !important;
+	font-size: 0.855rem !important;
 	font-weight: 600 !important;
-	gap: 10px !important;
-	transition: background 120ms ease !important;
+	color: #334155 !important;
+	background: transparent !important;
+	cursor: pointer !important;
+	transition: background 110ms ease, color 110ms ease !important;
+	border: none !important;
+	outline: none !important;
+}
+
+.admin-action-menu .p-menuitem-link:hover {
+	background: rgba(15,23,42,0.05) !important;
+	color: #0f172a !important;
 }
 
 .admin-action-menu .p-menuitem-icon {
-	font-size: 0.85rem !important;
+	flex-shrink: 0 !important;
+	font-size: 0.82rem !important;
 	width: 16px !important;
+	text-align: center !important;
 }
 
-/* Contextual colour overrides */
-.admin-action-menu .action-menu-unlock > .p-menuitem-link {
-	color: #b45309 !important;
-}
-.admin-action-menu .action-menu-unlock > .p-menuitem-link:hover {
-	background: rgba(217,119,6,0.10) !important;
+.admin-action-menu .p-menuitem-text {
+	flex: 1 !important;
+	line-height: 1.1 !important;
 }
 
-.admin-action-menu .action-menu-enable > .p-menuitem-link {
-	color: #15803d !important;
-}
-.admin-action-menu .action-menu-enable > .p-menuitem-link:hover {
-	background: rgba(21,128,61,0.09) !important;
-}
-
-.admin-action-menu .action-menu-disable > .p-menuitem-link {
-	color: #c2410c !important;
-}
-.admin-action-menu .action-menu-disable > .p-menuitem-link:hover {
-	background: rgba(194,65,12,0.09) !important;
+/* Separator */
+.admin-action-menu .p-menu-separator {
+	border: none !important;
+	border-top: 1px solid rgba(15,23,42,0.07) !important;
+	margin: 4px 10px !important;
 }
 
-.admin-action-menu .action-menu-delete > .p-menuitem-link {
-	color: #dc2626 !important;
-}
-.admin-action-menu .action-menu-delete > .p-menuitem-link:hover {
-	background: rgba(220,38,38,0.09) !important;
-}
+/* ── Contextual item colours ────────────────────────────────────────── */
 
+/* Locked — account IS locked out: amber, active */
+.admin-action-menu .action-menu-unlock > .p-menuitem-link { color: #92400e !important; }
+.admin-action-menu .action-menu-unlock > .p-menuitem-link .p-menuitem-icon { color: #d97706 !important; }
+.admin-action-menu .action-menu-unlock > .p-menuitem-link:hover { background: rgba(217,119,6,0.08) !important; color: #78350f !important; }
+
+/* Not locked — greyed out, not interactive */
+.admin-action-menu .action-menu-unlock-off > .p-menuitem-link {
+	color: #94a3b8 !important;
+	cursor: not-allowed !important;
+	opacity: 0.55 !important;
+}
+.admin-action-menu .action-menu-unlock-off > .p-menuitem-link .p-menuitem-icon { color: #94a3b8 !important; }
+.admin-action-menu .action-menu-unlock-off > .p-menuitem-link:hover { background: transparent !important; color: #94a3b8 !important; }
+
+.admin-action-menu .action-menu-enable  > .p-menuitem-link { color: #166534 !important; }
+.admin-action-menu .action-menu-enable  > .p-menuitem-link .p-menuitem-icon { color: #16a34a !important; }
+.admin-action-menu .action-menu-enable  > .p-menuitem-link:hover { background: rgba(22,163,74,0.08) !important; color: #14532d !important; }
+
+.admin-action-menu .action-menu-disable > .p-menuitem-link { color: #9a3412 !important; }
+.admin-action-menu .action-menu-disable > .p-menuitem-link .p-menuitem-icon { color: #ea580c !important; }
+.admin-action-menu .action-menu-disable > .p-menuitem-link:hover { background: rgba(234,88,12,0.08) !important; color: #7c2d12 !important; }
+
+.admin-action-menu .action-menu-delete  > .p-menuitem-link { color: #991b1b !important; }
+.admin-action-menu .action-menu-delete  > .p-menuitem-link .p-menuitem-icon { color: #dc2626 !important; }
+.admin-action-menu .action-menu-delete  > .p-menuitem-link:hover { background: rgba(220,38,38,0.08) !important; color: #7f1d1d !important; }
+
+
+/* ── Dark mode ─────────────────────────────────────────────────── */
 html[data-theme="dark"] .admin-action-menu.p-menu {
-	background: #0f1729 !important;
+	background: #111827 !important;
 	border-color: rgba(148,163,184,0.14) !important;
-	box-shadow: 0 16px 40px rgba(0,0,0,0.40) !important;
+	box-shadow: 0 4px 6px rgba(0,0,0,0.2), 0 16px 40px rgba(0,0,0,0.42) !important;
 }
 
-html[data-theme="dark"] .admin-action-menu .p-menuitem-link {
-	color: #cbd5e1 !important;
+html[data-theme="dark"] .admin-action-menu .p-menu-separator {
+	border-top-color: rgba(148,163,184,0.11) !important;
 }
 
-html[data-theme="dark"] .admin-action-menu .p-menuitem-link:hover {
-	background: rgba(148,163,184,0.10) !important;
-}
+html[data-theme="dark"] .admin-action-menu .p-menuitem-link { color: #cbd5e1 !important; }
+html[data-theme="dark"] .admin-action-menu .p-menuitem-link:hover { background: rgba(148,163,184,0.08) !important; color: #f1f5f9 !important; }
 
-html[data-theme="dark"] .admin-action-menu .action-menu-unlock > .p-menuitem-link { color: #fbbf24 !important; }
+html[data-theme="dark"] .admin-action-menu .action-menu-unlock > .p-menuitem-link { color: #fcd34d !important; }
+html[data-theme="dark"] .admin-action-menu .action-menu-unlock > .p-menuitem-link:hover { background: rgba(251,191,36,0.10) !important; }
 html[data-theme="dark"] .admin-action-menu .action-menu-enable  > .p-menuitem-link { color: #4ade80 !important; }
+html[data-theme="dark"] .admin-action-menu .action-menu-enable  > .p-menuitem-link:hover { background: rgba(74,222,128,0.10) !important; }
 html[data-theme="dark"] .admin-action-menu .action-menu-disable > .p-menuitem-link { color: #fb923c !important; }
+html[data-theme="dark"] .admin-action-menu .action-menu-disable > .p-menuitem-link:hover { background: rgba(251,146,60,0.10) !important; }
 html[data-theme="dark"] .admin-action-menu .action-menu-delete  > .p-menuitem-link { color: #f87171 !important; }
+html[data-theme="dark"] .admin-action-menu .action-menu-delete  > .p-menuitem-link:hover { background: rgba(248,113,113,0.10) !important; }
+
 
 
 /* Dialogs */
