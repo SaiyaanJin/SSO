@@ -896,6 +896,35 @@ html[data-theme="dark"] .nav-dir-btn:hover {
 	color: #2dd4bf;
 }
 
+/* Admin Console nav button — red accent */
+.nav-admin-btn {
+	color: #b91c1c !important;
+	font-weight: 900 !important;
+	padding: 4px 10px !important;
+	border-radius: 6px !important;
+	border: 1px solid rgba(220, 38, 38, 0.28) !important;
+	background: rgba(220, 38, 38, 0.07) !important;
+	transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease !important;
+}
+
+.nav-admin-btn:hover {
+	color: #991b1b !important;
+	background: rgba(220, 38, 38, 0.14) !important;
+	box-shadow: 0 4px 12px rgba(220, 38, 38, 0.18) !important;
+}
+
+html[data-theme="dark"] .nav-admin-btn {
+	color: #f87171 !important;
+	border-color: rgba(239, 68, 68, 0.28) !important;
+	background: rgba(239, 68, 68, 0.08) !important;
+}
+
+html[data-theme="dark"] .nav-admin-btn:hover {
+	color: #fca5a5 !important;
+	background: rgba(239, 68, 68, 0.15) !important;
+}
+
+
 /* ─────────────────────────────────────────
    Employee Directory Dialog
 ───────────────────────────────────────── */

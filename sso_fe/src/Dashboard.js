@@ -438,14 +438,13 @@ export default function Dashboard() {
 					{userDepartment === "Information Technology (IT)" && (
 						<>
 							<button
-								type="button"
-								className="nav-dir-btn"
-								onClick={() => navigate("/admin")}
-								style={{ marginRight: '0.5rem' }}
-							>
-								<i className="pi pi-shield" aria-hidden="true" />
-								<span>Admin Console</span>
-							</button>
+						type="button"
+						className="nav-dir-btn nav-admin-btn"
+						onClick={() => navigate("/admin")}
+					>
+						<i className="pi pi-shield" aria-hidden="true" />
+						<span>Admin Console</span>
+					</button>
 							<button
 								type="button"
 								className="nav-dir-btn"
