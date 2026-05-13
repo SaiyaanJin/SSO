@@ -1,0 +1,166 @@
+.admin-shell {
+	min-height: 100vh;
+	background: var(--bg-canvas, #f8fafc);
+	display: flex;
+	flex-direction: column;
+	font-family: 'Inter', sans-serif;
+}
+
+.admin-nav {
+	background: var(--surface-card, #ffffff);
+	border-bottom: 1px solid var(--surface-border, #e2e8f0);
+	padding: 1rem 2rem;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.admin-nav__brand {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.admin-nav__brand img {
+	height: 36px;
+	width: auto;
+}
+
+.admin-nav__brand span {
+	font-weight: 700;
+	font-size: 1.25rem;
+	color: var(--text-color, #1e293b);
+	letter-spacing: -0.02em;
+}
+
+.admin-nav__brand-subtitle {
+	font-weight: 500;
+	font-size: 1rem;
+	color: #64748b;
+	margin-left: 0.5rem;
+	padding-left: 0.5rem;
+	border-left: 1px solid #cbd5e1;
+}
+
+.admin-nav__actions {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.admin-content {
+	flex: 1;
+	padding: 2rem;
+	max-width: 1400px;
+	margin: 0 auto;
+	width: 100%;
+}
+
+.admin-header {
+	margin-bottom: 2rem;
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+}
+
+.admin-header h1 {
+	margin: 0 0 0.5rem 0;
+	font-size: 2rem;
+	font-weight: 800;
+	color: #0f172a;
+	letter-spacing: -0.03em;
+}
+
+.admin-header p {
+	margin: 0;
+	color: #64748b;
+	font-size: 1rem;
+}
+
+/* Table Toolbar */
+.admin-table-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.admin-search-wrap {
+	position: relative;
+	width: 350px;
+}
+
+.admin-search-wrap i {
+	position: absolute;
+	left: 1rem;
+	top: 50%;
+	transform: translateY(-50%);
+	color: #94a3b8;
+}
+
+.admin-search-input {
+	width: 100%;
+	padding-left: 2.5rem !important;
+	border-radius: 99px !important;
+}
+
+/* Badges */
+.status-badge {
+	padding: 0.25rem 0.75rem;
+	border-radius: 99px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.status-badge.status-active {
+	background: #ecfdf5;
+	color: #059669;
+}
+
+.status-badge.status-disabled {
+	background: #fef2f2;
+	color: #dc2626;
+}
+
+.dept-badge {
+	background: #f1f5f9;
+	color: #475569;
+	padding: 0.25rem 0.75rem;
+	border-radius: 6px;
+	font-size: 0.8rem;
+	font-weight: 500;
+}
+
+/* Actions */
+.action-buttons {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.action-btn {
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+}
+
+/* Form Styles */
+.field {
+	margin-bottom: 1.5rem;
+}
+
+.field label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 600;
+	color: #334155;
+	font-size: 0.9rem;
+}
+
+.field input, .field .p-dropdown {
+	width: 100%;
+}

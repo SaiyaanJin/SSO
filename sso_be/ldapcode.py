@@ -886,5 +886,289 @@ def visit():
     return Response(headers={"Authorization": "whatever"})
 
 
+# ---------------------------------------------------------------------------
+#  Admin Console API
+# ---------------------------------------------------------------------------
+
+def require_it_admin(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        token = request.headers.get("Token") or get_nested_token()
+        if not token:
+            return json_error("Missing token", 401)
+        try:
+            decoded = decode_login_token(token)
+        except jwt.ExpiredSignatureError:
+            return json_error("Session expired", 401)
+        except jwt.InvalidTokenError:
+            return json_error("Bad token", 401)
+        if not decoded.get("Login"):
+            return json_error(decoded.get("Reason", "Login failed"), 401)
+        if decoded.get("User") in logged_out_users:
+            return json_error("User has logout", 401)
+        if decoded.get("Department") != "Information Technology (IT)":
+            return json_error("Forbidden: IT Admin access required", 403)
+        request.sso_user = decoded
+        return view(*args, **kwargs)
+    return wrapper
+
+def _get_adsi_container(container_dn):
+    import win32com.client
+    dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
+    dso = win32com.client.GetObject("LDAP:")
+    return dso.OpenDSObject(
+        f"LDAP://{dc}/{container_dn}",
+        settings.ldap_admin_user,
+        settings.ldap_admin_password,
+        1,
+    )
+
+def _create_user_adsi(username, password, name, department, email, phone):
+    import pywintypes
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        # Create in CN=Users by default
+        container_dn = f"CN=Users,{settings.ldap_base_dn}"
+        container = _get_adsi_container(container_dn)
+        
+        user = container.Create("user", f"CN={name}")
+        user.Put("sAMAccountName", username)
+        user.Put("userPrincipalName", f"{username}@{settings.ldap_upn_domain}")
+        if email:
+            user.Put("mail", email)
+        if phone:
+            user.Put("telephoneNumber", phone)
+        user.SetInfo()
+        
+        user.SetPassword(password)
+        user.Put("userAccountControl", 512)
+        user.SetInfo()
+        
+        return None
+    except Exception as e:
+        return f"Failed to create user: {str(e)}"
+    finally:
+        pythoncom.CoUninitialize()
+
+def _delete_user_adsi(user_dn):
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        parent_dn = user_dn.split(",", 1)[1]
+        cn = user_dn.split(",", 1)[0].split("=")[1]
+        container = _get_adsi_container(parent_dn)
+        container.Delete("user", f"CN={cn}")
+        return None
+    except Exception as e:
+        return f"Failed to delete user: {str(e)}"
+    finally:
+        pythoncom.CoUninitialize()
+
+def _modify_user_adsi(user_dn, updates):
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        obj = _get_adsi_container(user_dn)
+        for key, value in updates.items():
+            if value:
+                obj.Put(key, value)
+            else:
+                obj.PutEx(1, key, 0) # 1 = ADS_PROPERTY_CLEAR
+        obj.SetInfo()
+        return None
+    except Exception as e:
+        return f"Failed to modify user: {str(e)}"
+    finally:
+        pythoncom.CoUninitialize()
+
+def _toggle_user_status_adsi(user_dn, enable):
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        obj = _get_adsi_container(user_dn)
+        uac = obj.Get("userAccountControl")
+        if enable:
+            uac = uac & ~2 # remove disabled bit
+        else:
+            uac = uac | 2 # set disabled bit
+        obj.Put("userAccountControl", uac)
+        obj.SetInfo()
+        return None
+    except Exception as e:
+        return f"Failed to toggle status: {str(e)}"
+    finally:
+        pythoncom.CoUninitialize()
+
+@app.route("/admin/users", methods=["GET"])
+@require_it_admin
+def admin_get_users():
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        result = conn.search_s(
+            settings.ldap_base_dn,
+            ldap.SCOPE_SUBTREE,
+            "(objectClass=user)",
+            ["cn", "distinguishedName", "mail", "sAMAccountName", "telephoneNumber", "userAccountControl"]
+        )
+        users = []
+        for dn, attrs in result:
+            if not dn: continue
+            uac = first_attr(attrs, "userAccountControl")
+            disabled = False
+            if uac and uac.isdigit():
+                disabled = bool(int(uac) & 2)
+                
+            users.append({
+                "Name": first_attr(attrs, "cn"),
+                "Emp_id": first_attr(attrs, "sAMAccountName"),
+                "Mail": first_attr(attrs, "mail"),
+                "Mobile": first_attr(attrs, "telephoneNumber"),
+                "Department": department_name_from_dn(dn),
+                "DN": dn,
+                "Status": "Disabled" if disabled else "Active"
+            })
+        return jsonify(users)
+    except Exception as exc:
+        return json_error(f"Failed to fetch users: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+@app.route("/admin/users", methods=["POST"])
+@require_it_admin
+def admin_create_user():
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    password = str(body.get("password", ""))
+    name = str(body.get("name", "")).strip()
+    department = str(body.get("department", "")).strip()
+    email = str(body.get("email", "")).strip()
+    phone = str(body.get("phone", "")).strip()
+    
+    if not username or not password or not name:
+        return json_error("username, password, and name are required", 400)
+        
+    strength_error = _validate_password_strength(password)
+    if strength_error:
+        return json_error(strength_error, 400)
+        
+    error_msg = _create_user_adsi(username, password, name, department, email, phone)
+    if error_msg:
+        return json_error(error_msg, 500)
+        
+    return jsonify({"status": "success", "message": "User created successfully"})
+
+@app.route("/admin/users/<username>", methods=["PUT"])
+@require_it_admin
+def admin_modify_user(username):
+    body = request.get_json(silent=True) or {}
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+        
+        updates = {}
+        if "name" in body: updates["cn"] = body["name"]
+        if "email" in body: updates["mail"] = body["email"]
+        if "phone" in body: updates["telephoneNumber"] = body["phone"]
+        
+        if updates:
+            error_msg = _modify_user_adsi(dn, updates)
+            if error_msg: return json_error(error_msg, 500)
+            
+        return jsonify({"status": "success", "message": "User modified successfully"})
+    except Exception as exc:
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+@app.route("/admin/users/<username>", methods=["DELETE"])
+@require_it_admin
+def admin_delete_user(username):
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+        
+        error_msg = _delete_user_adsi(dn)
+        if error_msg: return json_error(error_msg, 500)
+        
+        return jsonify({"status": "success", "message": "User deleted successfully"})
+    except Exception as exc:
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+@app.route("/admin/users/<username>/reset-password", methods=["POST"])
+@require_it_admin
+def admin_reset_password(username):
+    body = request.get_json(silent=True) or {}
+    new_password = str(body.get("password", ""))
+    if not new_password:
+        return json_error("password is required", 400)
+        
+    strength_error = _validate_password_strength(new_password)
+    if strength_error:
+        return json_error(strength_error, 400)
+        
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+        
+        error_msg = _reset_password_adsi(dn, new_password)
+        if error_msg: return json_error(error_msg, 500)
+        
+        return jsonify({"status": "success", "message": "Password reset successfully"})
+    except Exception as exc:
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+@app.route("/admin/users/<username>/toggle-status", methods=["POST"])
+@require_it_admin
+def admin_toggle_status(username):
+    body = request.get_json(silent=True) or {}
+    enable = body.get("enable", True)
+    
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+        
+        error_msg = _toggle_user_status_adsi(dn, enable)
+        if error_msg: return json_error(error_msg, 500)
+        
+        status_msg = "enabled" if enable else "disabled"
+        return jsonify({"status": "success", "message": f"User {status_msg} successfully"})
+    except Exception as exc:
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=settings.debug)

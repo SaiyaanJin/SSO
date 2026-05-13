@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import LoginApp from "./LoginPage.js";
 import Dashboard from "./Dashboard.js";
 import ResetPassword from "./ResetPassword.js";
+import AdminConsole from "./AdminConsole.js";
 import "./App.css";
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
 				<Route path="/" element={<LoginApp />} />
 				<Route path="dashboard" element={<Dashboard />} />
 				<Route path="reset-password" element={<ResetPassword />} />
+				<Route path="admin" element={<AdminConsole />} />
 			</Routes>
 		</div>
 	);

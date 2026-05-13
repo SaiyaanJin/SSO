@@ -436,14 +436,25 @@ export default function Dashboard() {
 				</div>
 				<div className="dashboard-nav__actions">
 					{userDepartment === "Information Technology (IT)" && (
-						<button
-							type="button"
-							className="nav-dir-btn"
-							onClick={fetchEmpData}
-						>
-							<i className="pi pi-address-book" aria-hidden="true" />
-							<span>Employee Directory</span>
-						</button>
+						<>
+							<button
+								type="button"
+								className="nav-dir-btn"
+								onClick={() => navigate("/admin")}
+								style={{ marginRight: '0.5rem' }}
+							>
+								<i className="pi pi-shield" aria-hidden="true" />
+								<span>Admin Console</span>
+							</button>
+							<button
+								type="button"
+								className="nav-dir-btn"
+								onClick={fetchEmpData}
+							>
+								<i className="pi pi-address-book" aria-hidden="true" />
+								<span>Employee Directory</span>
+							</button>
+						</>
 					)}
 					<a href="#applications">Applications</a>
 					<a href="#quick-links">Quick Links</a>
