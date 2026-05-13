@@ -39,12 +39,23 @@ function LoginApp() {
 	const onClickLogin = async (event) => {
 		event.preventDefault();
 		setErrorMessage("");
-		setIsLoading(true);
 
+		// Employee IDs are purely numeric; reject anything else immediately
+		// so non-ERLDC credentials never reach the server.
+		const trimmedUser = user.trim();
+		if (!/^\d+$/.test(trimmedUser)) {
+			setErrorMessage(
+				"You are not authorized to use this SSO portal. " +
+				"Please contact the IT Department."
+			);
+			return;
+		}
+
+		setIsLoading(true);
 		try {
 			const sign = require("jwt-encode");
 			const jwt = sign(
-				{ username: user, password: password },
+				{ username: trimmedUser, password: password },
 				"frontendss0@posoco"
 			);
 			const response = await axios.post("https://sso.erldc.in:5000/token", {

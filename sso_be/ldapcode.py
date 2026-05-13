@@ -2,6 +2,7 @@ import datetime as dt
 import logging
 import os
 import random
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -1111,6 +1112,225 @@ def _unlock_user_adsi(user_dn):
         pythoncom.CoUninitialize()
 
 
+# ---------------------------------------------------------------------------
+#  Admin Console Audit Email
+# ---------------------------------------------------------------------------
+
+AUDIT_EMAIL = "erldcit@grid-india.in"
+
+
+def _fetch_target_info(username):
+    """Return (display_name, emp_id, department) for an AD sAMAccountName.
+    Falls back to the raw username if the lookup fails.
+    """
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_SUBTREE,
+            f"(sAMAccountName={escape_filter_chars(username)})",
+            ["cn", "distinguishedName"],
+        )
+        conn.unbind_s()
+        rec = next((r for r in result if r and r[0]), None)
+        if rec:
+            dn, attrs = rec
+            return (
+                first_attr(attrs, "cn") or username,
+                username,
+                department_name_from_dn(dn),
+            )
+    except Exception:
+        pass
+    return username, username, "Unknown"
+
+
+def _send_audit_email(action_label, performer, target_name, target_id,
+                      target_dept, details_rows):
+    """Build a rich HTML audit email and send it in a background thread.
+
+    Args:
+        action_label  : str  — e.g. "Create User", "Reset Password"
+        performer     : dict — keys: name, id, dept, timestamp
+        target_name   : str  — CN of the affected AD account
+        target_id     : str  — sAMAccountName of the affected account
+        target_dept   : str  — OU/department of the affected account
+        details_rows  : list[tuple(field, old_val, new_val)] | list[tuple(field, value)]
+                        If each tuple has 3 elements it is rendered as a before/after diff;
+                        if 2 elements it is rendered as a simple field → value row.
+    """
+
+    # ── Build details table ─────────────────────────────────────────────
+    is_diff = details_rows and len(details_rows[0]) == 3
+
+    if is_diff:
+        detail_header = (
+            '<tr>'
+            '<th style="background:#f1f5f9;padding:8px 14px;text-align:left;'
+            'font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;">Field</th>'
+            '<th style="background:#fef2f2;padding:8px 14px;text-align:left;'
+            'font-size:12px;color:#991b1b;border-bottom:1px solid #e2e8f0;">Previous Value</th>'
+            '<th style="background:#f0fdf4;padding:8px 14px;text-align:left;'
+            'font-size:12px;color:#166534;border-bottom:1px solid #e2e8f0;">New Value</th>'
+            '</tr>'
+        )
+        detail_body = "".join(
+            f'<tr>'
+            f'<td style="padding:7px 14px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;"><strong>{f}</strong></td>'
+            f'<td style="padding:7px 14px;font-size:13px;color:#dc2626;border-bottom:1px solid #f1f5f9;">{o or "<em style=color:#94a3b8>—</em>"}</td>'
+            f'<td style="padding:7px 14px;font-size:13px;color:#16a34a;border-bottom:1px solid #f1f5f9;">{n or "<em style=color:#94a3b8>—</em>"}</td>'
+            f'</tr>'
+            for f, o, n in details_rows
+        )
+    else:
+        detail_header = (
+            '<tr>'
+            '<th style="background:#f1f5f9;padding:8px 14px;text-align:left;'
+            'font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;">Detail</th>'
+            '<th style="background:#f1f5f9;padding:8px 14px;text-align:left;'
+            'font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;">Value</th>'
+            '</tr>'
+        )
+        detail_body = "".join(
+            f'<tr>'
+            f'<td style="padding:7px 14px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;"><strong>{f}</strong></td>'
+            f'<td style="padding:7px 14px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;">{v}</td>'
+            f'</tr>'
+            for f, v in details_rows
+        )
+
+    # ── Action badge colour ─────────────────────────────────────────────
+    badge_colours = {
+        "Create User":     ("#166534", "#dcfce7"),
+        "Edit User":       ("#1e40af", "#dbeafe"),
+        "Delete User":     ("#991b1b", "#fee2e2"),
+        "Reset Password":  ("#92400e", "#fef3c7"),
+        "Enable Account":  ("#166534", "#dcfce7"),
+        "Disable Account": ("#7c2d12", "#ffedd5"),
+        "Unlock Account":  ("#1e40af", "#dbeafe"),
+    }
+    fg, bg = badge_colours.get(action_label, ("#334155", "#f1f5f9"))
+
+    html_body = f"""
+    <div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px;
+                margin:0 auto;padding:0;background:#ffffff;border-radius:12px;
+                border:1px solid #e2e8f0;overflow:hidden;">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1e1b4b,#312e81);
+                  padding:24px 28px;">
+        <span style="display:inline-block;background:#dc2626;color:#fff;
+                     font-size:11px;font-weight:800;padding:3px 10px;
+                     border-radius:4px;letter-spacing:1px;margin-bottom:12px;">ERLDC SSO</span>
+        <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:800;">
+          Admin Activity Audit Log
+        </h1>
+        <p style="margin:4px 0 0;color:rgba(255,255,255,0.65);font-size:13px;">
+          Active Directory Console — Automated Notification
+        </p>
+      </div>
+
+      <!-- Action badge -->
+      <div style="padding:20px 28px 0;">
+        <span style="display:inline-block;background:{bg};color:{fg};
+                     font-size:13px;font-weight:800;padding:5px 14px;
+                     border-radius:6px;border:1px solid {fg}22;">
+          &#9654;&nbsp; {action_label}
+        </span>
+        <p style="margin:6px 0 0;color:#64748b;font-size:12px;">
+          Performed at &nbsp;<strong>{performer["timestamp"]}</strong>
+        </p>
+      </div>
+
+      <!-- Two-column identity cards -->
+      <div style="display:flex;gap:16px;padding:16px 28px;">
+
+        <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;
+                    border-radius:8px;padding:14px 16px;">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:800;color:#64748b;
+                    text-transform:uppercase;letter-spacing:.06em;">Performed By</p>
+          <p style="margin:0;font-size:15px;font-weight:800;color:#0f172a;">{performer["name"]}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#475569;">
+            ID:&nbsp;<code style="background:#e2e8f0;padding:1px 5px;
+            border-radius:4px;font-size:11px;">{performer["id"]}</code>
+          </p>
+          <p style="margin:4px 0 0;font-size:12px;color:#475569;">{performer["dept"]}</p>
+        </div>
+
+        <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;
+                    border-radius:8px;padding:14px 16px;">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:800;color:#64748b;
+                    text-transform:uppercase;letter-spacing:.06em;">Target Account</p>
+          <p style="margin:0;font-size:15px;font-weight:800;color:#0f172a;">{target_name}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#475569;">
+            ID:&nbsp;<code style="background:#e2e8f0;padding:1px 5px;
+            border-radius:4px;font-size:11px;">{target_id}</code>
+          </p>
+          <p style="margin:4px 0 0;font-size:12px;color:#475569;">{target_dept}</p>
+        </div>
+      </div>
+
+      <!-- Details table -->
+      <div style="padding:0 28px 24px;">
+        <p style="margin:0 0 8px;font-size:11px;font-weight:800;color:#64748b;
+                  text-transform:uppercase;letter-spacing:.06em;">Action Details</p>
+        <table style="width:100%;border-collapse:collapse;border-radius:8px;
+                      overflow:hidden;border:1px solid #e2e8f0;">
+          <thead>{detail_header}</thead>
+          <tbody>{detail_body}</tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;border-top:1px solid #e2e8f0;
+                  padding:12px 28px;text-align:center;">
+        <p style="margin:0;font-size:11px;color:#94a3b8;">
+          This is an automated audit notification from the ERLDC SSO Admin Console.
+          Do not reply to this email.
+        </p>
+      </div>
+    </div>
+    """
+
+    subject = f"[AD Audit] {action_label} — {target_name} ({target_id}) by {performer['id']}"
+
+    def _send():
+        try:
+            credentials = Credentials(settings.mail_user, settings.mail_password)
+            config = Configuration(server=settings.mail_server, credentials=credentials)
+            account = Account(
+                primary_smtp_address=settings.mail_from,
+                config=config,
+                autodiscover=False,
+                access_type=DELEGATE,
+            )
+            m = Message(
+                account=account,
+                subject=subject,
+                body=HTMLBody(html_body),
+                to_recipients=[AUDIT_EMAIL],
+            )
+            m.send()
+            logger.info("Audit email sent: %s on %s by %s", action_label, target_id, performer["id"])
+        except Exception as exc:
+            logger.exception("Failed to send audit email: %s", exc)
+
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
+
+
+def _performer_from_request():
+    """Extract performer info dict from the current request's SSO token."""
+    sso = getattr(request, "sso_user", {})
+    return {
+        "name":      sso.get("Person_Name", sso.get("User", "Unknown")),
+        "id":        sso.get("User", "Unknown"),
+        "dept":      sso.get("Department", "Unknown"),
+        "timestamp": dt.datetime.now(dt.timezone.utc)
+                         .astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+                         .strftime("%d %b %Y, %I:%M:%S %p IST"),
+    }
+
+
 @app.route("/admin/users", methods=["GET"])
 @require_it_admin
 def admin_get_users():
@@ -1180,7 +1400,20 @@ def admin_create_user():
     error_msg = _create_user_adsi(username, password, name, department, email, phone)
     if error_msg:
         return json_error(error_msg, 500)
-        
+
+    _send_audit_email(
+        "Create User",
+        _performer_from_request(),
+        name, username,
+        department or "Not specified",
+        [
+            ("Full Name",   name),
+            ("Employee ID", username),
+            ("Department",  department or "Not specified"),
+            ("Email",       email or "Not provided"),
+            ("Phone",       phone or "Not provided"),
+        ],
+    )
     return jsonify({"status": "success", "message": "User created successfully"})
 
 @app.route("/admin/users/<username>", methods=["PUT"])
@@ -1195,24 +1428,36 @@ def admin_modify_user(username):
             return json_error("User not found", 404)
         dn = rec[0]
 
+        # Snapshot old values for the audit diff BEFORE making any changes
+        old_attrs = conn.search_s(
+            dn, ldap.SCOPE_BASE, "(objectClass=*)",
+            ["cn", "mail", "telephoneNumber", "distinguishedName"]
+        )
+        old = {}
+        if old_attrs and old_attrs[0][1]:
+            a = old_attrs[0][1]
+            old["name"]   = first_attr(a, "cn") or ""
+            old["email"]  = first_attr(a, "mail") or ""
+            old["phone"]  = first_attr(a, "telephoneNumber") or ""
+            old["dept"]   = department_name_from_dn(dn)
+        old_target_name = old.get("name", username)
+
         # Step 1: Rename (change CN/displayName) if name was provided
-        # cn is the RDN — must use MoveHere, not Put
         new_name = str(body.get("name", "")).strip()
         if new_name:
             rename_error, new_dn = _rename_user_adsi(dn, new_name)
             if rename_error:
                 return json_error(rename_error, 500)
-            dn = new_dn  # Use updated DN for subsequent operations
+            dn = new_dn
 
         # Step 2: Move to a different department (OU) if requested
         new_dept = str(body.get("department", "")).strip()
         if new_dept:
-            # Accept either full name ("Information Technology (IT)") or OU code ("IT")
             ou_code = DEPT_TO_OU.get(new_dept, new_dept)
             move_error, new_dn = _move_user_to_dept_adsi(dn, ou_code)
             if move_error:
                 return json_error(move_error, 500)
-            dn = new_dn  # Use updated DN for subsequent attribute updates
+            dn = new_dn
 
         # Step 3: Update non-RDN attributes (email, phone)
         attr_updates = {}
@@ -1220,12 +1465,36 @@ def admin_modify_user(username):
             attr_updates["mail"] = body["email"]
         if "phone" in body:
             attr_updates["telephoneNumber"] = body["phone"]
-
         if attr_updates:
             error_msg = _modify_user_adsi(dn, attr_updates)
             if error_msg:
                 return json_error(error_msg, 500)
 
+        # Build before/after diff — only include fields that actually changed
+        diff_rows = []
+        new_name_val  = new_name  or old.get("name", "")
+        new_dept_val  = new_dept  or old.get("dept", "")
+        new_email_val = body.get("email", old.get("email", ""))
+        new_phone_val = body.get("phone", old.get("phone", ""))
+        for field, old_v, new_v in [
+            ("Full Name",  old.get("name", ""),  new_name_val),
+            ("Department", old.get("dept", ""),  new_dept_val),
+            ("Email",      old.get("email", ""), new_email_val),
+            ("Phone",      old.get("phone", ""), new_phone_val),
+        ]:
+            if old_v != new_v:
+                diff_rows.append((field, old_v, new_v))
+
+        if not diff_rows:
+            diff_rows = [("Note", "No fields changed", "")]
+
+        _send_audit_email(
+            "Edit User",
+            _performer_from_request(),
+            old_target_name, username,
+            old.get("dept", "Unknown"),
+            diff_rows,
+        )
         return jsonify({"status": "success", "message": "User modified successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1247,7 +1516,14 @@ def admin_delete_user(username):
         
         error_msg = _delete_user_adsi(dn)
         if error_msg: return json_error(error_msg, 500)
-        
+
+        target_name, _, target_dept = _fetch_target_info(username)
+        _send_audit_email(
+            "Delete User",
+            _performer_from_request(),
+            target_name, username, target_dept,
+            [("Action", "Permanently deleted from Active Directory")],
+        )
         return jsonify({"status": "success", "message": "User deleted successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1278,7 +1554,17 @@ def admin_reset_password(username):
         
         error_msg = _reset_password_adsi(dn, new_password)
         if error_msg: return json_error(error_msg, 500)
-        
+
+        target_name, _, target_dept = _fetch_target_info(username)
+        _send_audit_email(
+            "Reset Password",
+            _performer_from_request(),
+            target_name, username, target_dept,
+            [
+                ("Action",   "Active Directory password reset by IT Admin"),
+                ("Note",     "New password was set — value not logged for security"),
+            ],
+        )
         return jsonify({"status": "success", "message": "Password reset successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1303,7 +1589,16 @@ def admin_toggle_status(username):
         
         error_msg = _toggle_user_status_adsi(dn, enable)
         if error_msg: return json_error(error_msg, 500)
-        
+
+        action_label = "Enable Account" if enable else "Disable Account"
+        target_name, _, target_dept = _fetch_target_info(username)
+        _send_audit_email(
+            action_label,
+            _performer_from_request(),
+            target_name, username, target_dept,
+            [("Account Status", "Disabled" if not enable else "Active",
+                                "Active"   if enable      else "Disabled")],
+        )
         status_msg = "enabled" if enable else "disabled"
         return jsonify({"status": "success", "message": f"User {status_msg} successfully"})
     except Exception as exc:
@@ -1330,7 +1625,16 @@ def admin_unlock_user(username):
         if error_msg:
             return json_error(error_msg, 500)
 
+        target_name, _, target_dept = _fetch_target_info(username)
         logger.info("Account unlocked for %s by admin", username)
+        _send_audit_email(
+            "Unlock Account",
+            _performer_from_request(),
+            target_name, username, target_dept,
+            [
+                ("Lockout Status", "Locked (repeated failed login attempts)", "Unlocked"),
+            ],
+        )
         return jsonify({"status": "success", "message": "Account unlocked successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
