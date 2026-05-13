@@ -37,9 +37,10 @@ export default function AdminConsole() {
 	const [filters, setFilters] = useState({ global: { value: null, matchMode: FilterMatchMode.CONTAINS } });
 
 	// Dialog visibility
-	const [userDialog, setUserDialog] = useState(false);
-	const [pwdDialog,  setPwdDialog]  = useState(false);
-	const [delDialog,  setDelDialog]  = useState(false);
+	const [userDialog,    setUserDialog]    = useState(false);
+	const [pwdDialog,     setPwdDialog]     = useState(false);
+	const [delDialog,     setDelDialog]     = useState(false);
+	const [unlockDialog,  setUnlockDialog]  = useState(false);
 
 	const [selectedUser, setSelectedUser] = useState(null);
 	const [formData, setFormData]         = useState(EMPTY_FORM);
@@ -88,7 +89,7 @@ export default function AdminConsole() {
 
 	// ── Dialog helpers ──────────────────────────────────────────────────
 	const hideAll = () => {
-		setUserDialog(false); setPwdDialog(false); setDelDialog(false);
+		setUserDialog(false); setPwdDialog(false); setDelDialog(false); setUnlockDialog(false);
 		setSelectedUser(null); setFormData(EMPTY_FORM); setSubmitting(false);
 	};
 
@@ -111,8 +112,9 @@ export default function AdminConsole() {
 		setUserDialog(true);
 	};
 
-	const openResetPwd  = (user) => { setSelectedUser(user); setFormData(EMPTY_FORM); setPwdDialog(true); };
-	const openDelDialog = (user) => { setSelectedUser(user); setDelDialog(true); };
+	const openResetPwd   = (user) => { setSelectedUser(user); setFormData(EMPTY_FORM); setPwdDialog(true); };
+	const openDelDialog  = (user) => { setSelectedUser(user); setDelDialog(true); };
+	const openUnlockDialog = (user) => { setSelectedUser(user); setUnlockDialog(true); };
 
 	// ── API calls ────────────────────────────────────────────────────────
 	const handleSaveUser = async () => {
@@ -163,10 +165,23 @@ export default function AdminConsole() {
 		}
 	};
 
+	const handleUnlockUser = async () => {
+		setSubmitting(true);
+		try {
+			await axios.post(`${API_BASE}/admin/users/${selectedUser.Emp_id}/unlock`, {}, getHeaders());
+			alert(`Account for ${selectedUser.Name} has been unlocked successfully.`);
+			hideAll(); fetchUsers();
+		} catch (err) {
+			alert("Error: " + (err.response?.data?.error || err.message));
+			setSubmitting(false);
+		}
+	};
+
 	// ── Derived stats ────────────────────────────────────────────────────
-	const totalUsers   = users.length;
-	const activeUsers  = users.filter(u => u.Status === "Active").length;
+	const totalUsers    = users.length;
+	const activeUsers   = users.filter(u => u.Status === "Active").length;
 	const disabledUsers = users.filter(u => u.Status === "Disabled").length;
+	const lockedUsers   = users.filter(u => u.Locked).length;
 
 	// ── Cell templates ───────────────────────────────────────────────────
 	const rowNumBody = (_, opts) => (
@@ -198,9 +213,17 @@ export default function AdminConsole() {
 	const statusBody = (rowData) => {
 		const isActive = rowData.Status === "Active";
 		return (
-			<span className={`admin-status-badge ${isActive ? "status-active" : "status-disabled"}`}>
-				{rowData.Status}
-			</span>
+			<div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+				<span className={`admin-status-badge ${isActive ? "status-active" : "status-disabled"}`}>
+					{rowData.Status}
+				</span>
+				{rowData.Locked && (
+					<span className="admin-status-badge status-locked">
+						<i className="pi pi-lock" style={{ fontSize: "0.65rem" }} />
+						&nbsp;Locked
+					</span>
+				)}
+			</div>
 		);
 	};
 
@@ -220,6 +243,14 @@ export default function AdminConsole() {
 					tooltip="Reset Password" tooltipOptions={{ position: "top" }}
 					onClick={() => openResetPwd(rowData)}
 				/>
+				{rowData.Locked && (
+					<Button
+						icon="pi pi-lock-open"
+						className="p-button-rounded p-button-text p-button-info"
+						tooltip="Unlock Account" tooltipOptions={{ position: "top" }}
+						onClick={() => openUnlockDialog(rowData)}
+					/>
+				)}
 				<Button
 					icon={isActive ? "pi pi-lock" : "pi pi-unlock"}
 					className={`p-button-rounded p-button-text ${isActive ? "p-button-danger" : "p-button-success"}`}
@@ -310,6 +341,10 @@ export default function AdminConsole() {
 					<div className="admin-hero-stat">
 						<span style={{ color: "#fca5a5" }}>{loading ? "—" : disabledUsers}</span>
 						<p>Disabled</p>
+					</div>
+					<div className="admin-hero-stat">
+						<span style={{ color: "#fbbf24" }}>{loading ? "—" : lockedUsers}</span>
+						<p>Locked Out</p>
 					</div>
 				</div>
 			</section>
@@ -463,6 +498,46 @@ export default function AdminConsole() {
 				<div className="admin-dialog-footer">
 					<Button label="Cancel — Keep User" icon="pi pi-times" className="p-button-text p-button-secondary" onClick={hideAll} disabled={submitting} />
 					<Button label="Delete Permanently" icon="pi pi-trash" className="admin-confirm-danger" onClick={handleDeleteUser} loading={submitting} />
+				</div>
+			</Dialog>
+
+			{/* ── Unlock Account Dialog ─────────────────────────────────── */}
+			<Dialog
+				visible={unlockDialog}
+				style={{ width: "440px" }}
+				header={
+					<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+						<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.18)", fontSize: "1.2rem" }}>
+							<i className="pi pi-lock-open" style={{ color: "#fff" }} />
+						</span>
+						<span style={{ color: "#fff", fontWeight: 900 }}>Unlock Account</span>
+					</div>
+				}
+				modal
+				className="admin-dialog"
+				onHide={hideAll}
+			>
+				<div className="admin-confirm-box" style={{ background: "rgba(251,191,36,0.07)", borderColor: "rgba(251,191,36,0.25)", marginBottom: "1.25rem" }}>
+					<i className="pi pi-lock" style={{ fontSize: "1.4rem", color: "#d97706" }} />
+					<div>
+						<strong>{selectedUser?.Name}</strong>
+						<p>ID: <code>{selectedUser?.Emp_id}</code> &nbsp;·&nbsp; {selectedUser?.Department}</p>
+						<p style={{ marginTop: "6px", fontSize: "0.82rem", color: "#92400e" }}>
+							This account is currently <b>locked out</b> due to repeated failed login attempts.
+							Clicking <b>Unlock</b> will immediately clear the lockout and allow the user to log in again.
+						</p>
+					</div>
+				</div>
+				<div className="admin-dialog-footer">
+					<Button label="Cancel" icon="pi pi-times" className="p-button-text p-button-secondary" onClick={hideAll} disabled={submitting} />
+					<Button
+						label="Unlock Account"
+						icon="pi pi-lock-open"
+						className="admin-save-btn"
+						style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", borderColor: "#d97706" }}
+						onClick={handleUnlockUser}
+						loading={submitting}
+					/>
 				</div>
 			</Dialog>
 		</main>

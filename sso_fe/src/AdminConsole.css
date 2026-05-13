@@ -222,7 +222,7 @@ html[data-theme="dark"] .admin-back-btn:hover { color: #f87171; }
 	position: relative;
 	z-index: 1;
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 12px;
 	margin-top: 22px;
 }
@@ -593,6 +593,19 @@ html[data-theme="dark"] .admin-status-badge.status-disabled {
 	background: rgba(239,68,68,0.10);
 	border-color: rgba(239,68,68,0.26);
 	color: #f87171;
+}
+
+.admin-status-badge.status-locked {
+	background: rgba(217,119,6,0.10);
+	border: 1px solid rgba(217,119,6,0.30);
+	color: #b45309;
+	font-size: 0.70rem;
+}
+
+html[data-theme="dark"] .admin-status-badge.status-locked {
+	background: rgba(251,191,36,0.10);
+	border-color: rgba(251,191,36,0.28);
+	color: #fbbf24;
 }
 
 /* Action Buttons */

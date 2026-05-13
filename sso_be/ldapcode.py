@@ -1094,6 +1094,23 @@ def _toggle_user_status_adsi(user_dn, enable):
     finally:
         pythoncom.CoUninitialize()
 
+def _unlock_user_adsi(user_dn):
+    """Unlock an AD account that has been locked out due to repeated failed logins.
+    Sets lockoutTime to 0, which clears the lockout immediately.
+    """
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        obj = _get_adsi_container(user_dn)
+        obj.Put("lockoutTime", 0)
+        obj.SetInfo()
+        return None
+    except Exception as e:
+        return f"Failed to unlock account: {str(e)}"
+    finally:
+        pythoncom.CoUninitialize()
+
+
 @app.route("/admin/users", methods=["GET"])
 @require_it_admin
 def admin_get_users():
@@ -1104,7 +1121,8 @@ def admin_get_users():
             settings.ldap_base_dn,
             ldap.SCOPE_SUBTREE,
             "(objectClass=user)",
-            ["cn", "distinguishedName", "mail", "sAMAccountName", "telephoneNumber", "userAccountControl"]
+            ["cn", "distinguishedName", "mail", "sAMAccountName", "telephoneNumber",
+             "userAccountControl", "lockoutTime"]
         )
         users = []
         for dn, attrs in result:
@@ -1113,7 +1131,16 @@ def admin_get_users():
             disabled = False
             if uac and uac.isdigit():
                 disabled = bool(int(uac) & 2)
-                
+
+            # lockoutTime is a large-integer (COM) or a string in LDAP; >0 means locked
+            lockout_raw = first_attr(attrs, "lockoutTime")
+            locked = False
+            if lockout_raw:
+                try:
+                    locked = int(lockout_raw) > 0
+                except (ValueError, TypeError):
+                    locked = False
+
             users.append({
                 "Name": first_attr(attrs, "cn"),
                 "Emp_id": first_attr(attrs, "sAMAccountName"),
@@ -1121,7 +1148,8 @@ def admin_get_users():
                 "Mobile": first_attr(attrs, "telephoneNumber"),
                 "Department": department_name_from_dn(dn),
                 "DN": dn,
-                "Status": "Disabled" if disabled else "Active"
+                "Status": "Disabled" if disabled else "Active",
+                "Locked": locked,
             })
         return jsonify(users)
     except Exception as exc:
@@ -1278,6 +1306,32 @@ def admin_toggle_status(username):
         
         status_msg = "enabled" if enable else "disabled"
         return jsonify({"status": "success", "message": f"User {status_msg} successfully"})
+    except Exception as exc:
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+
+@app.route("/admin/users/<username>/unlock", methods=["POST"])
+@require_it_admin
+def admin_unlock_user(username):
+    """Unlock an AD account locked out after repeated wrong-password attempts."""
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+
+        error_msg = _unlock_user_adsi(dn)
+        if error_msg:
+            return json_error(error_msg, 500)
+
+        logger.info("Account unlocked for %s by admin", username)
+        return jsonify({"status": "success", "message": "Account unlocked successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
     finally:
