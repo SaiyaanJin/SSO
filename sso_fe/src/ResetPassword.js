@@ -59,6 +59,19 @@ export default function ResetPassword() {
 	// -- Cleanup timer on unmount ---------------------------------------
 	useEffect(() => () => clearInterval(timerRef.current), []);
 
+	// -- Success redirect countdown ------------------------------------
+	const [redirectCountdown, setRedirectCountdown] = useState(5);
+	useEffect(() => {
+		if (step !== 4) return;
+		const id = setInterval(() => {
+			setRedirectCountdown(prev => {
+				if (prev <= 1) { clearInterval(id); navigate("/"); return 0; }
+				return prev - 1;
+			});
+		}, 1000);
+		return () => clearInterval(id);
+	}, [step, navigate]);
+
 	/* ================================================================ */
 	/*  Step 1 — Send OTP                                               */
 	/* ================================================================ */
@@ -472,6 +485,22 @@ export default function ResetPassword() {
 								</div>
 							)}
 
+							{/* Password requirements checklist */}
+							<ul className="pwd-requirements">
+								{[
+									{ ok: newPassword.length >= 8,           label: "At least 8 characters" },
+									{ ok: /[A-Z]/.test(newPassword),         label: "One uppercase letter" },
+									{ ok: /[a-z]/.test(newPassword),         label: "One lowercase letter" },
+									{ ok: /\d/.test(newPassword),            label: "One number" },
+									{ ok: /[!@#$%^&*\-_=+[\]{}|;:,.<>?/]/.test(newPassword), label: "One special character" },
+								].map(req => (
+									<li key={req.label} className={`pwd-req-item${req.ok ? " pwd-req-item--ok" : (newPassword ? " pwd-req-item--fail" : "")} `}>
+										<i className={`pi ${req.ok ? "pi-check-circle" : "pi-circle"}`} />
+										{req.label}
+									</li>
+								))}
+							</ul>
+
 							<label htmlFor="confirmPassword">Confirm Password</label>
 							<div className="reset-field">
 								<i className="pi pi-lock" aria-hidden="true" />
@@ -539,15 +568,17 @@ export default function ResetPassword() {
 							</div>
 							<h3>Password Reset Successful!</h3>
 							<p>
-								Your password has been updated. You can now log in with your new
-								credentials.
+								Your password has been updated. You can now log in with your new credentials.
+							</p>
+							<p className="reset-redirect-note">
+								<i className="pi pi-arrow-left" /> Redirecting to login in <strong>{redirectCountdown}s</strong>…
 							</p>
 							<button
 								className="reset-back-login"
 								onClick={() => navigate("/")}
 							>
 								<i className="pi pi-arrow-left" aria-hidden="true" />
-								Back to Login
+								Back to Login Now
 							</button>
 						</div>
 					</div>

@@ -1341,3 +1341,222 @@ html[data-theme="dark"] .emp-dir-empty {
 html[data-theme="dark"] .emp-dir-empty i {
 	color: #2dd4bf;
 }
+
+/* ═══════════════════════════════════════════════
+   Change Password Nav Button
+═══════════════════════════════════════════════ */
+.nav-changepwd-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 38px;
+	padding: 0 13px;
+	border: 1px solid rgba(14, 165, 233, 0.32);
+	border-radius: 8px;
+	background: rgba(14, 165, 233, 0.08);
+	color: #0369a1;
+	font-size: 0.84rem;
+	font-weight: 800;
+	cursor: pointer;
+	font-family: inherit;
+	transition: all 150ms ease;
+}
+.nav-changepwd-btn:hover {
+	background: rgba(14, 165, 233, 0.16);
+	border-color: rgba(14, 165, 233, 0.5);
+	transform: translateY(-1px);
+}
+html[data-theme="dark"] .nav-changepwd-btn {
+	border-color: rgba(56, 189, 248, 0.28);
+	background: rgba(56, 189, 248, 0.08);
+	color: #38bdf8;
+}
+
+/* Red badge on Change Password button when expiry is near */
+.nav-changepwd-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: #dc2626;
+	color: #ffffff;
+	font-size: 0.65rem;
+	font-weight: 900;
+	letter-spacing: 0;
+	line-height: 1;
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.6; }
+}
+
+/* ═══════════════════════════════════════════════
+   Password Expiry Banner
+═══════════════════════════════════════════════ */
+.dashboard-pwd-banner {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px clamp(18px, 3vw, 48px);
+	background: rgba(245, 158, 11, 0.12);
+	border-top: 3px solid #f59e0b;
+	border-bottom: 1px solid rgba(245, 158, 11, 0.28);
+	color: #92400e;
+	animation: fadeUp 320ms ease both;
+}
+
+.dashboard-pwd-banner--critical {
+	background: rgba(220, 38, 38, 0.10);
+	border-top-color: #dc2626;
+	border-bottom-color: rgba(220, 38, 38, 0.25);
+	color: #7f1d1d;
+}
+
+html[data-theme="dark"] .dashboard-pwd-banner {
+	background: rgba(245, 158, 11, 0.10);
+	border-top-color: #fbbf24;
+	color: #fde68a;
+}
+
+html[data-theme="dark"] .dashboard-pwd-banner--critical {
+	background: rgba(220, 38, 38, 0.10);
+	border-top-color: #f87171;
+	color: #fca5a5;
+}
+
+.dashboard-pwd-banner__icon {
+	font-size: 1.25rem;
+	flex-shrink: 0;
+	color: #f59e0b;
+}
+.dashboard-pwd-banner--critical .dashboard-pwd-banner__icon {
+	color: #dc2626;
+}
+html[data-theme="dark"] .dashboard-pwd-banner__icon     { color: #fbbf24; }
+html[data-theme="dark"] .dashboard-pwd-banner--critical .dashboard-pwd-banner__icon { color: #f87171; }
+
+.dashboard-pwd-banner__body {
+	flex: 1;
+	font-size: 0.9rem;
+	font-weight: 600;
+}
+
+.dashboard-pwd-banner__btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 15px;
+	border-radius: 7px;
+	border: 1px solid rgba(245, 158, 11, 0.5);
+	background: #f59e0b;
+	color: #ffffff;
+	font-size: 0.82rem;
+	font-weight: 800;
+	font-family: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all 140ms ease;
+}
+.dashboard-pwd-banner__btn:hover {
+	background: #d97706;
+}
+.dashboard-pwd-banner--critical .dashboard-pwd-banner__btn {
+	background: #dc2626;
+	border-color: rgba(220, 38, 38, 0.5);
+}
+.dashboard-pwd-banner--critical .dashboard-pwd-banner__btn:hover {
+	background: #b91c1c;
+}
+
+.dashboard-pwd-banner__dismiss {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	border: 1px solid rgba(245, 158, 11, 0.3);
+	background: transparent;
+	color: #92400e;
+	cursor: pointer;
+	font-family: inherit;
+	flex-shrink: 0;
+	transition: all 130ms ease;
+}
+.dashboard-pwd-banner__dismiss:hover {
+	background: rgba(245, 158, 11, 0.18);
+}
+html[data-theme="dark"] .dashboard-pwd-banner__dismiss { color: #fde68a; }
+
+/* ═══════════════════════════════════════════════
+   Session Expiry Warning Modal
+═══════════════════════════════════════════════ */
+.session-warn-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: #d97706;
+	font-weight: 900;
+	font-size: 1.05rem;
+}
+.session-warn-header .pi { font-size: 1.1rem; }
+
+.session-warn-body {
+	text-align: center;
+	padding: 8px 0 16px;
+}
+
+.session-warn-countdown {
+	font-size: 2.8rem;
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.02em;
+	color: #dc2626;
+	line-height: 1;
+	margin-bottom: 12px;
+}
+
+.session-warn-body p {
+	color: #64748b;
+	font-size: 0.92rem;
+	margin: 0 0 20px;
+}
+
+.session-warn-actions {
+	display: flex;
+	justify-content: center;
+	gap: 12px;
+}
+
+.session-warn-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 20px;
+	border-radius: 8px;
+	border: none;
+	font-size: 0.88rem;
+	font-weight: 800;
+	font-family: inherit;
+	cursor: pointer;
+	transition: all 140ms ease;
+}
+.session-warn-btn--stay {
+	background: #0f766e;
+	color: #ffffff;
+}
+.session-warn-btn--stay:hover { background: #0d6460; }
+.session-warn-btn--logout {
+	background: rgba(220, 38, 38, 0.10);
+	color: #dc2626;
+	border: 1px solid rgba(220, 38, 38, 0.25);
+}
+.session-warn-btn--logout:hover {
+	background: rgba(220, 38, 38, 0.18);
+}

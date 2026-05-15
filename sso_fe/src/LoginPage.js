@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
 import { useNavigate, Link } from "react-router-dom";
@@ -12,13 +12,17 @@ import "./LoginPage.css";
 
 const SSO_API = "https://sso.erldc.in:5000";
 const PASSWORD_EXPIRY_WARNING_DAYS = 7;
+const REMEMBER_KEY = "sso_remember_user";
 
 function LoginApp() {
+	// Restore remembered username on mount
 	const [password, setPassword] = useState("");
-	const [user, setUser] = useState("");
+	const [user, setUser] = useState(() => localStorage.getItem(REMEMBER_KEY) || "");
+	const [rememberUser, setRememberUser] = useState(() => !!localStorage.getItem(REMEMBER_KEY));
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
+	const [capsLock, setCapsLock] = useState(false);
 
 	// Password-expiry warning state
 	const [expiryWarning, setExpiryWarning] = useState(null); // { daysRemaining: number }
@@ -26,6 +30,12 @@ function LoginApp() {
 	const [pendingToken, setPendingToken] = useState(null); // token held while warning is shown
 
 	const navigate = useNavigate();
+
+	// Detect Caps Lock via keyboard and mouse events
+	const handleKeyEvent = (e) => {
+		if (e.getModifierState) setCapsLock(e.getModifierState("CapsLock"));
+	};
+
 
 	useEffect(() => {
 		const token = localStorage.getItem("token");
@@ -72,6 +82,13 @@ function LoginApp() {
 			return;
 		}
 
+		// Persist or clear remembered username
+		if (rememberUser) {
+			localStorage.setItem(REMEMBER_KEY, trimmedUser);
+		} else {
+			localStorage.removeItem(REMEMBER_KEY);
+		}
+
 		setIsLoading(true);
 		try {
 			const sign = require("jwt-encode");
@@ -99,7 +116,7 @@ function LoginApp() {
 				}
 			} else {
 				localStorage.removeItem("token");
-				setErrorMessage("Invalid credentials");
+				setErrorMessage("Invalid credentials. Please check your Employee ID and password.");
 			}
 		} catch {
 			setErrorMessage("Unable to complete sign in. Please try again.");
@@ -216,6 +233,20 @@ function LoginApp() {
 							/>
 						</div>
 
+						{/* Remember me */}
+						<label className="login-remember" htmlFor="rememberMe">
+							<input
+								id="rememberMe"
+								type="checkbox"
+								checked={rememberUser}
+								onChange={(e) => {
+									setRememberUser(e.target.checked);
+									if (!e.target.checked) localStorage.removeItem(REMEMBER_KEY);
+								}}
+							/>
+							<span>Remember my Employee ID</span>
+						</label>
+
 						<label htmlFor="formPassword">Desktop Password</label>
 						<div className="login-field">
 							<i className="pi pi-key" aria-hidden="true" />
@@ -226,6 +257,9 @@ function LoginApp() {
 								value={password}
 								onChange={(event) => setPassword(event.target.value)}
 								autoComplete="current-password"
+								onKeyDown={handleKeyEvent}
+								onMouseDown={handleKeyEvent}
+								onFocus={handleKeyEvent}
 								required
 							/>
 							<button
@@ -240,6 +274,13 @@ function LoginApp() {
 								/>
 							</button>
 						</div>
+
+						{/* Caps Lock warning */}
+						{capsLock && !showPassword && (
+							<p className="login-capslock-warn" role="alert">
+								<i className="pi pi-exclamation-circle" /> Caps Lock is ON
+							</p>
+						)}
 
 						<div className="login-forgot-row">
 							<Link to="/reset-password" className="login-forgot-link">

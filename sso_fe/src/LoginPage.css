@@ -537,3 +537,50 @@ html[data-theme="dark"] .login-expiry-btn--secondary {
 		transform: translateY(0) scale(1);
 	}
 }
+
+/* ── Remember Me ───────────────────────────────── */
+.login-remember {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: -4px 0 12px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.login-remember input[type="checkbox"] {
+	width: 15px;
+	height: 15px;
+	accent-color: #0ea5e9;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.login-remember span {
+	font-size: 0.8rem;
+	color: #334155;
+	font-weight: 500;
+}
+
+html[data-theme="dark"] .login-remember span {
+	color: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Caps Lock Warning ──────────────────────────── */
+.login-capslock-warn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 6px 0 0;
+	padding: 7px 12px;
+	border-radius: 7px;
+	background: rgba(251, 191, 36, 0.14);
+	border: 1px solid rgba(251, 191, 36, 0.35);
+	color: #fbbf24;
+	font-size: 0.8rem;
+	font-weight: 700;
+	animation: expirySlideIn 200ms ease both;
+}
+.login-capslock-warn .pi {
+	font-size: 0.8rem;
+}

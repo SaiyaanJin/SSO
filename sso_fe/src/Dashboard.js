@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import AppCard from "./AppCard.js";
@@ -235,6 +235,9 @@ const applications = [
 	},
 ];
 
+const SSO_API = "https://sso.erldc.in:5000";
+const SESSION_WARNING_THRESHOLD = 5 * 60; // show warning when <5 min remain
+
 export default function Dashboard() {
 	const navigate = useNavigate();
 	const [query, setQuery] = useState("");
@@ -242,7 +245,16 @@ export default function Dashboard() {
 	const [isCheckingSession, setIsCheckingSession] = useState(true);
 	const [sessionExpiresAt, setSessionExpiresAt] = useState(null);
 	const [userDepartment, setUserDepartment] = useState(null);
+	const [userName, setUserName] = useState("");
 	const [now, setNow] = useState(() => new Date());
+
+	// Password expiry for the logged-in user
+	const [pwdExpiry, setPwdExpiry] = useState(null); // { daysRemaining, neverExpires }
+	const [pwdBannerDismissed, setPwdBannerDismissed] = useState(false);
+
+	// Session expiry warning modal
+	const [showSessionWarning, setShowSessionWarning] = useState(false);
+	const sessionWarnedRef = useRef(false);
 
 	// Employee Directory States
 	const [showEmpDirectory, setShowEmpDirectory] = useState(false);
@@ -324,8 +336,14 @@ export default function Dashboard() {
 			}
 
 			setUserDepartment(decoded.Department);
+			setUserName(typeof decoded.Name === "string" ? decoded.Name : "");
 			setSessionExpiresAt(expiresAt);
 			setIsCheckingSession(false);
+
+			// Fetch password expiry for this user (non-blocking)
+			axios.post(`${SSO_API}/password-expiry`, {}, { headers: { Token: token } })
+				.then(res => setPwdExpiry(res.data))
+				.catch(() => {}); // silently ignore
 		} catch (error) {
 			localStorage.removeItem("token");
 			navigate("/");
@@ -347,6 +365,16 @@ export default function Dashboard() {
 
 		if (sessionExpiresAt.getTime() <= now.getTime()) {
 			onClickLogout();
+			return;
+		}
+
+		// Compute inline to avoid TDZ — remainingSessionSeconds useMemo is declared later
+		const secsLeft = Math.max(0, Math.floor((sessionExpiresAt.getTime() - now.getTime()) / 1000));
+
+		// Show warning modal when < SESSION_WARNING_THRESHOLD seconds remain
+		if (secsLeft <= SESSION_WARNING_THRESHOLD && !sessionWarnedRef.current) {
+			sessionWarnedRef.current = true;
+			setShowSessionWarning(true);
 		}
 	}, [isCheckingSession, now, onClickLogout, sessionExpiresAt]);
 
@@ -455,6 +483,19 @@ export default function Dashboard() {
 						</button>
 					</>
 				)}
+					<button
+						type="button"
+						className="nav-dir-btn nav-changepwd-btn"
+						onClick={() => navigate("/reset-password")}
+						title="Change your Active Directory password via OTP"
+					>
+						<i className="pi pi-key" aria-hidden="true" />
+						<span>Change Password</span>
+						{pwdExpiry && !pwdExpiry.never_expires && pwdExpiry.days_remaining !== null && pwdExpiry.days_remaining <= 7 && (
+							<span className="nav-changepwd-badge">{pwdExpiry.days_remaining}d</span>
+						)}
+					</button>
+
 					<a href="#applications">Applications</a>
 					<a href="#quick-links">Quick Links</a>
 					<Button
@@ -473,7 +514,11 @@ export default function Dashboard() {
 						<img src={GILogo} alt="Grid India" className="dashboard-brand__logo" />
 						<div>
 							<p className="dashboard-brand__eyebrow">ERLDC, Grid India</p>
-							<h1>Welcome to ERLDC Intranet</h1>
+							<h1>
+								{typeof userName === "string" && userName
+									? `Welcome, ${userName.split(" ")[0]}`
+									: "Welcome to ERLDC Intranet"}
+							</h1>
 							<p className="dashboard-brand__copy">
 								A secure launchpad for control room, metering, analytics, HRD,
 								and stakeholder service applications.
@@ -515,6 +560,70 @@ export default function Dashboard() {
 					</div>
 				</div>
 			</section>
+
+			{/* ── Password Expiry Banner ──────────────────────────────── */}
+			{pwdExpiry && !pwdExpiry.never_expires && !pwdBannerDismissed &&
+				pwdExpiry.days_remaining !== null && pwdExpiry.days_remaining <= 7 && (
+				<div className={`dashboard-pwd-banner ${pwdExpiry.days_remaining <= 3 ? "dashboard-pwd-banner--critical" : ""}`} role="alert">
+					<div className="dashboard-pwd-banner__icon">
+						<i className={`pi ${pwdExpiry.days_remaining === 0 ? "pi-times-circle" : "pi-exclamation-triangle"}`} />
+					</div>
+					<div className="dashboard-pwd-banner__body">
+						<strong>
+							{pwdExpiry.days_remaining === 0
+								? "Your password has expired!"
+								: `Your password expires in ${pwdExpiry.days_remaining} day${pwdExpiry.days_remaining === 1 ? "" : "s"}.`}
+						</strong>
+						{" "}Reset it now to avoid being locked out of all ERLDC systems.
+					</div>
+					<button
+						type="button"
+						className="dashboard-pwd-banner__btn"
+						onClick={() => navigate("/reset-password")}
+					>
+						<i className="pi pi-key" /> Reset Password
+					</button>
+					<button
+						type="button"
+						className="dashboard-pwd-banner__dismiss"
+						aria-label="Dismiss"
+						onClick={() => setPwdBannerDismissed(true)}
+					>
+						<i className="pi pi-times" />
+					</button>
+				</div>
+			)}
+
+			{/* ── Session Expiry Warning Modal ─────────────────────────── */}
+			<Dialog
+				visible={showSessionWarning}
+				onHide={() => setShowSessionWarning(false)}
+				className="session-warn-dialog"
+				modal
+				closable={false}
+				header={(
+					<div className="session-warn-header">
+						<i className="pi pi-clock" />
+						Session Expiring Soon
+					</div>
+				)}
+				style={{ width: "min(440px, 92vw)" }}
+			>
+				<div className="session-warn-body">
+					<div className="session-warn-countdown">{sessionCountdown}</div>
+					<p>Your session will expire soon. Any unsaved work may be lost.</p>
+					<div className="session-warn-actions">
+						<button type="button" className="session-warn-btn session-warn-btn--stay"
+							onClick={() => setShowSessionWarning(false)}>
+							<i className="pi pi-check" /> Stay Logged In
+						</button>
+						<button type="button" className="session-warn-btn session-warn-btn--logout"
+							onClick={onClickLogout}>
+							<i className="pi pi-sign-out" /> Logout Now
+						</button>
+					</div>
+				</div>
+			</Dialog>
 
 			<section className="dashboard-workspace">
 				<div className="dashboard-toolbar">
