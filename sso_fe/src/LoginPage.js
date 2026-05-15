@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { jwtDecode as jwt_decode } from "jwt-decode";
 import { useNavigate, Link } from "react-router-dom";
@@ -10,38 +10,59 @@ import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 import "./LoginPage.css";
 
+const SSO_API = "https://sso.erldc.in:5000";
+const PASSWORD_EXPIRY_WARNING_DAYS = 7;
+
 function LoginApp() {
 	const [password, setPassword] = useState("");
 	const [user, setUser] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
+
+	// Password-expiry warning state
+	const [expiryWarning, setExpiryWarning] = useState(null); // { daysRemaining: number }
+	const [expiryChecked, setExpiryChecked] = useState(false);
+	const [pendingToken, setPendingToken] = useState(null); // token held while warning is shown
+
 	const navigate = useNavigate();
 
 	useEffect(() => {
 		const token = localStorage.getItem("token");
-
-		if (!token) {
-			return;
-		}
-
+		if (!token) return;
 		try {
 			const decoded = jwt_decode(token);
-
-			if (decoded.Login) {
-				navigate("/dashboard");
-			}
-		} catch (error) {
+			if (decoded.Login) navigate("/dashboard");
+		} catch {
 			localStorage.removeItem("token");
 		}
 	}, [navigate]);
 
+	/** Check password expiry for the just-authenticated user. */
+	const checkPasswordExpiry = useCallback(async (token) => {
+		try {
+			const res = await axios.post(
+				`${SSO_API}/password-expiry`,
+				{},
+				{ headers: { Token: token } }
+			);
+			const { days_remaining, never_expires } = res.data;
+			if (!never_expires && days_remaining !== null && days_remaining <= PASSWORD_EXPIRY_WARNING_DAYS) {
+				return days_remaining;
+			}
+		} catch {
+			// Non-critical — silently ignore
+		}
+		return null;
+	}, []);
+
 	const onClickLogin = async (event) => {
 		event.preventDefault();
 		setErrorMessage("");
+		setExpiryWarning(null);
+		setExpiryChecked(false);
+		setPendingToken(null);
 
-		// Employee IDs are purely numeric; reject anything else immediately
-		// so non-ERLDC credentials never reach the server.
 		const trimmedUser = user.trim();
 		if (!/^\d+$/.test(trimmedUser)) {
 			setErrorMessage(
@@ -58,23 +79,47 @@ function LoginApp() {
 				{ username: trimmedUser, password: password },
 				"frontendss0@posoco"
 			);
-			const response = await axios.post("https://sso.erldc.in:5000/token", {
+			const response = await axios.post(`${SSO_API}/token`, {
 				headers: { token: jwt },
 			});
 			const decoded = jwt_decode(response.data.Token);
 
 			if (decoded.Login) {
-				localStorage.setItem("token", response.data.Token);
-				navigate("/dashboard");
+				const token = response.data.Token;
+				const daysLeft = await checkPasswordExpiry(token);
+
+				if (daysLeft !== null) {
+					// Store token & show warning instead of navigating immediately
+					setPendingToken(token);
+					setExpiryWarning({ daysRemaining: daysLeft });
+					setExpiryChecked(true);
+				} else {
+					localStorage.setItem("token", token);
+					navigate("/dashboard");
+				}
 			} else {
 				localStorage.removeItem("token");
 				setErrorMessage("Invalid credentials");
 			}
-		} catch (error) {
+		} catch {
 			setErrorMessage("Unable to complete sign in. Please try again.");
 		} finally {
 			setIsLoading(false);
 		}
+	};
+
+	/** User acknowledges warning and proceeds to dashboard anyway. */
+	const handleProceedToDashboard = () => {
+		if (pendingToken) {
+			localStorage.setItem("token", pendingToken);
+			navigate("/dashboard");
+		}
+	};
+
+	/** User wants to reset their password via OTP immediately. */
+	const handleResetNow = () => {
+		// Navigate to the OTP reset page; no need to persist the token first.
+		navigate("/reset-password");
 	};
 
 	return (
@@ -116,6 +161,45 @@ function LoginApp() {
 							<p>Use your desktop credentials</p>
 						</div>
 					</div>
+
+					{/* ── Password-expiry warning banner ── */}
+					{expiryChecked && expiryWarning && (
+						<div className="login-expiry-warning" role="alert" aria-live="assertive">
+							<div className="login-expiry-warning__icon">
+								<i className="pi pi-exclamation-triangle" aria-hidden="true" />
+							</div>
+							<div className="login-expiry-warning__body">
+								<p className="login-expiry-warning__title">
+									{expiryWarning.daysRemaining === 0
+										? "Your password expires today!"
+										: `Your password expires in ${expiryWarning.daysRemaining} day${expiryWarning.daysRemaining === 1 ? "" : "s"}!`}
+								</p>
+								<p className="login-expiry-warning__sub">
+									Please reset your password before it expires to avoid being locked out.
+								</p>
+								<div className="login-expiry-warning__actions">
+									<button
+										id="btnResetPasswordOtp"
+										type="button"
+										className="login-expiry-btn login-expiry-btn--primary"
+										onClick={handleResetNow}
+									>
+										<i className="pi pi-refresh" aria-hidden="true" />
+										Reset Password (OTP)
+									</button>
+									<button
+										id="btnProceedToDashboard"
+										type="button"
+										className="login-expiry-btn login-expiry-btn--secondary"
+										onClick={handleProceedToDashboard}
+									>
+										<i className="pi pi-arrow-right" aria-hidden="true" />
+										Continue to Dashboard
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
 
 					<form className="login-form" onSubmit={onClickLogin}>
 						<label htmlFor="formUsername">Employee ID</label>
@@ -169,7 +253,12 @@ function LoginApp() {
 							</p>
 						)}
 
-						<button className="login-submit" type="submit" disabled={isLoading}>
+						<button
+							id="btnLogin"
+							className="login-submit"
+							type="submit"
+							disabled={isLoading || (expiryChecked && !!expiryWarning)}
+						>
 							<span>{isLoading ? "Signing in" : "Login"}</span>
 							<i
 								className={isLoading ? "pi pi-spin pi-spinner" : "pi pi-arrow-right"}

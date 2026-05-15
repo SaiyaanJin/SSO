@@ -896,6 +896,140 @@ def forgot_password_reset():
                 pass
 
 
+def get_password_expiry_days(username):
+    """Return the number of days until the user's AD password expires.
+
+    Active Directory stores timestamps as 100-nanosecond intervals since
+    1601-01-01 (Windows FILETIME).  The domain ``maxPwdAge`` policy is stored
+    as a *negative* 100-ns interval.
+
+    Returns:
+        (days_remaining, error_message)
+        - days_remaining : int or None  (None when the password never expires)
+        - error_message  : str or None  (set on failure)
+    """
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+
+        # 1. Fetch the user's pwdLastSet and userAccountControl
+        safe = escape_filter_chars(username.strip())
+        fltr = f"(userPrincipalName={safe}@{settings.ldap_upn_domain})"
+        result = conn.search_s(
+            settings.ldap_base_dn,
+            ldap.SCOPE_SUBTREE,
+            fltr,
+            ["pwdLastSet", "userAccountControl", "msDS-UserPasswordExpiryTimeComputed"],
+        )
+        rec = next((item for item in result if item and item[0]), None)
+        if not rec:
+            return None, "User not found"
+
+        _, attrs = rec
+
+        # Check if the password never expires (flag bit 65536)
+        uac_raw = first_attr(attrs, "userAccountControl", "512")
+        try:
+            uac = int(uac_raw)
+        except ValueError:
+            uac = 512
+        if uac & 0x10000:  # DONT_EXPIRE_PASSWORD
+            return None, None  # password never expires
+
+        # Prefer the computed attribute if available (works even with Fine-Grained PSO)
+        computed_raw = first_attr(attrs, "msDS-UserPasswordExpiryTimeComputed", "")
+        if computed_raw and computed_raw not in ("0", "9223372036854775807"):
+            try:
+                expiry_filetime = int(computed_raw)
+                if expiry_filetime == 9223372036854775807:
+                    return None, None  # never expires
+                # Convert FILETIME -> UTC datetime
+                EPOCH_DIFF = 116444736000000000  # 100-ns ticks between 1601 and 1970
+                expiry_ts = (expiry_filetime - EPOCH_DIFF) / 10_000_000
+                expiry_dt = dt.datetime.fromtimestamp(expiry_ts, tz=dt.timezone.utc)
+                delta = expiry_dt - now_utc()
+                return max(int(delta.total_seconds() // 86400), 0), None
+            except (ValueError, OverflowError, OSError):
+                pass  # fall through to manual calculation
+
+        # Manual fallback: pwdLastSet + domain maxPwdAge
+        pwd_last_set_raw = first_attr(attrs, "pwdLastSet", "0")
+        try:
+            pwd_last_set = int(pwd_last_set_raw)
+        except ValueError:
+            pwd_last_set = 0
+
+        if pwd_last_set == 0:
+            return 0, None  # password must be changed at next logon
+
+        # 2. Fetch domain maxPwdAge
+        domain_result = conn.search_s(
+            settings.ldap_base_dn,
+            ldap.SCOPE_BASE,
+            "(objectClass=*)",
+            ["maxPwdAge"],
+        )
+        domain_rec = next((item for item in domain_result if item and item[0]), None)
+        if not domain_rec:
+            return None, "Could not read domain policy"
+
+        max_pwd_age_raw = first_attr(domain_rec[1], "maxPwdAge", "0")
+        try:
+            max_pwd_age = int(max_pwd_age_raw)
+        except ValueError:
+            max_pwd_age = 0
+
+        if max_pwd_age == 0:
+            return None, None  # passwords never expire in this domain
+
+        # maxPwdAge is a negative value in 100-ns ticks
+        max_pwd_age_seconds = abs(max_pwd_age) / 10_000_000
+
+        EPOCH_DIFF = 116444736000000000
+        last_set_ts = (pwd_last_set - EPOCH_DIFF) / 10_000_000
+        expiry_ts = last_set_ts + max_pwd_age_seconds
+        expiry_dt = dt.datetime.fromtimestamp(expiry_ts, tz=dt.timezone.utc)
+        delta = expiry_dt - now_utc()
+        return max(int(delta.total_seconds() // 86400), 0), None
+
+    except ldap.LDAPError as exc:
+        logger.exception("LDAP error in get_password_expiry_days for %s", username)
+        return None, f"LDAP error: {exc}"
+    finally:
+        if conn:
+            try:
+                conn.unbind_s()
+            except Exception:
+                pass
+
+
+@app.route("/password-expiry", methods=["POST"])
+@require_login_token
+def password_expiry():
+    """Return how many days remain before the logged-in user's password expires.
+
+    Frontend sends the standard Bearer token in the ``Token`` header.
+    Response JSON:
+        { "days_remaining": <int|null>, "never_expires": <bool> }
+    ``days_remaining`` is null when the password never expires or on error.
+    """
+    username = request.sso_user.get("User", "")
+    if not username:
+        return json_error("Could not determine user from token", 400)
+
+    days, err = get_password_expiry_days(username)
+    if err:
+        logger.warning("password_expiry check failed for %s: %s", username, err)
+        # Return a graceful response so the UI doesn't break
+        return jsonify({"days_remaining": None, "never_expires": False, "error": err})
+
+    never_expires = days is None
+    return jsonify({
+        "days_remaining": days,
+        "never_expires": never_expires,
+    })
+
+
 @app.route("/visit", methods=["GET", "POST"])
 def visit():
     return Response(headers={"Authorization": "whatever"})
@@ -1337,47 +1471,110 @@ def admin_get_users():
     conn = None
     try:
         conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+
+        # Fetch domain maxPwdAge once (negative 100-ns interval; 0 = never expire)
+        domain_result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_BASE, "(objectClass=*)", ["maxPwdAge"]
+        )
+        max_pwd_age_seconds = None  # None => domain never expires
+        if domain_result and domain_result[0][0]:
+            raw = first_attr(domain_result[0][1], "maxPwdAge", "0")
+            try:
+                val = int(raw)
+                if val != 0:
+                    max_pwd_age_seconds = abs(val) / 10_000_000
+            except (ValueError, TypeError):
+                pass
+
+        _EPOCH_DIFF = 116444736000000000  # 100-ns ticks between 1601-01-01 and 1970-01-01
+        now_ts = now_utc().timestamp()
+
         result = conn.search_s(
             settings.ldap_base_dn,
             ldap.SCOPE_SUBTREE,
             "(objectClass=user)",
             ["cn", "distinguishedName", "mail", "sAMAccountName", "telephoneNumber",
-             "userAccountControl", "lockoutTime"]
+             "userAccountControl", "lockoutTime",
+             "pwdLastSet", "msDS-UserPasswordExpiryTimeComputed"],
         )
         users = []
         for dn, attrs in result:
-            if not dn: continue
-            uac = first_attr(attrs, "userAccountControl")
-            disabled = False
-            if uac and uac.isdigit():
-                disabled = bool(int(uac) & 2)
+            if not dn:
+                continue
 
-            # lockoutTime is a large-integer (COM) or a string in LDAP; >0 means locked
-            lockout_raw = first_attr(attrs, "lockoutTime")
+            uac_raw = first_attr(attrs, "userAccountControl", "512")
+            uac = 512
+            try:
+                uac = int(uac_raw)
+            except (ValueError, TypeError):
+                pass
+            disabled = bool(uac & 2)
+
+            # lockoutTime > 0 means locked
+            lockout_raw = first_attr(attrs, "lockoutTime", "0")
             locked = False
-            if lockout_raw:
-                try:
-                    locked = int(lockout_raw) > 0
-                except (ValueError, TypeError):
-                    locked = False
+            try:
+                locked = int(lockout_raw) > 0
+            except (ValueError, TypeError):
+                pass
+
+            # ── Password expiry ──────────────────────────────────────────
+            pwd_expiry_days = None  # default: unknown / never expires
+
+            never_expires_flag = bool(uac & 0x10000)  # DONT_EXPIRE_PASSWORD
+
+            if not never_expires_flag:
+                # 1. Try the pre-computed attribute first (handles Fine-Grained PSO)
+                computed_raw = first_attr(attrs, "msDS-UserPasswordExpiryTimeComputed", "")
+                computed_ok = False
+                if computed_raw and computed_raw not in ("0", "9223372036854775807"):
+                    try:
+                        expiry_ft = int(computed_raw)
+                        if expiry_ft != 9223372036854775807:
+                            expiry_ts = (expiry_ft - _EPOCH_DIFF) / 10_000_000
+                            delta_days = int((expiry_ts - now_ts) // 86400)
+                            pwd_expiry_days = max(delta_days, 0)
+                            computed_ok = True
+                    except (ValueError, OverflowError, OSError):
+                        pass
+
+                # 2. Manual fallback: pwdLastSet + domain maxPwdAge
+                if not computed_ok and max_pwd_age_seconds is not None:
+                    pwd_last_raw = first_attr(attrs, "pwdLastSet", "0")
+                    try:
+                        pwd_last = int(pwd_last_raw)
+                        if pwd_last == 0:
+                            pwd_expiry_days = 0  # must change at next logon
+                        else:
+                            last_ts = (pwd_last - _EPOCH_DIFF) / 10_000_000
+                            expiry_ts = last_ts + max_pwd_age_seconds
+                            delta_days = int((expiry_ts - now_ts) // 86400)
+                            pwd_expiry_days = max(delta_days, 0)
+                    except (ValueError, OverflowError, OSError):
+                        pass
+                # If computed_ok is False and max_pwd_age_seconds is None,
+                # pwd_expiry_days stays None (domain never expires).
 
             users.append({
-                "Name": first_attr(attrs, "cn"),
-                "Emp_id": first_attr(attrs, "sAMAccountName"),
-                "Mail": first_attr(attrs, "mail"),
-                "Mobile": first_attr(attrs, "telephoneNumber"),
+                "Name":       first_attr(attrs, "cn"),
+                "Emp_id":     first_attr(attrs, "sAMAccountName"),
+                "Mail":       first_attr(attrs, "mail"),
+                "Mobile":     first_attr(attrs, "telephoneNumber"),
                 "Department": department_name_from_dn(dn),
-                "DN": dn,
-                "Status": "Disabled" if disabled else "Active",
-                "Locked": locked,
+                "DN":         dn,
+                "Status":     "Disabled" if disabled else "Active",
+                "Locked":     locked,
+                "PwdExpiry":  pwd_expiry_days,  # int (days left) | null
             })
         return jsonify(users)
     except Exception as exc:
         return json_error(f"Failed to fetch users: {exc}", 500)
     finally:
         if conn:
-            try: conn.unbind_s()
-            except: pass
+            try:
+                conn.unbind_s()
+            except Exception:
+                pass
 
 @app.route("/admin/users", methods=["POST"])
 @require_it_admin

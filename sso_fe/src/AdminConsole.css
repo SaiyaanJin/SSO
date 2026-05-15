@@ -926,3 +926,108 @@ html[data-theme="dark"] .admin-empty {
 	from { opacity: 0; transform: translateY(18px); }
 	to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ═══════════════════════════════════════════════
+   Password Expiry Badges
+═══════════════════════════════════════════════ */
+.admin-expiry-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 0.76rem;
+	font-weight: 900;
+	letter-spacing: 0.03em;
+	white-space: nowrap;
+	transition: transform 140ms ease;
+}
+
+.admin-expiry-badge:hover {
+	transform: scale(1.06);
+}
+
+/* Critical: ≤ 3 days — vivid red */
+.admin-expiry-critical {
+	background: rgba(220, 38, 38, 0.12);
+	border: 1px solid rgba(220, 38, 38, 0.35);
+	color: #b91c1c;
+	animation: expiry-pulse 1.6s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .admin-expiry-critical {
+	background: rgba(239, 68, 68, 0.15);
+	border-color: rgba(239, 68, 68, 0.40);
+	color: #f87171;
+}
+
+@keyframes expiry-pulse {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.25); }
+	50%       { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }
+}
+
+/* Warning: ≤ 7 days — amber */
+.admin-expiry-warning {
+	background: rgba(217, 119, 6, 0.10);
+	border: 1px solid rgba(217, 119, 6, 0.32);
+	color: #92400e;
+}
+
+html[data-theme="dark"] .admin-expiry-warning {
+	background: rgba(251, 191, 36, 0.10);
+	border-color: rgba(251, 191, 36, 0.30);
+	color: #fbbf24;
+}
+
+/* Soon: ≤ 30 days — slate blue */
+.admin-expiry-soon {
+	background: rgba(37, 99, 235, 0.08);
+	border: 1px solid rgba(37, 99, 235, 0.22);
+	color: #1d4ed8;
+}
+
+html[data-theme="dark"] .admin-expiry-soon {
+	background: rgba(96, 165, 250, 0.10);
+	border-color: rgba(96, 165, 250, 0.26);
+	color: #60a5fa;
+}
+
+/* OK: > 30 days — teal/green */
+.admin-expiry-ok {
+	background: rgba(15, 118, 110, 0.08);
+	border: 1px solid rgba(15, 118, 110, 0.24);
+	color: #0f766e;
+}
+
+html[data-theme="dark"] .admin-expiry-ok {
+	background: rgba(45, 212, 191, 0.10);
+	border-color: rgba(45, 212, 191, 0.26);
+	color: #2dd4bf;
+}
+
+/* Never expires — neutral grey */
+.admin-expiry-never {
+	background: rgba(100, 116, 139, 0.08);
+	border: 1px solid rgba(100, 116, 139, 0.22);
+	color: #64748b;
+}
+
+html[data-theme="dark"] .admin-expiry-never {
+	background: rgba(148, 163, 184, 0.08);
+	border-color: rgba(148, 163, 184, 0.20);
+	color: #94a3b8;
+}
+
+/* Expired / must change at next logon */
+.admin-expiry-expired {
+	background: rgba(127, 29, 29, 0.12);
+	border: 1px solid rgba(127, 29, 29, 0.35);
+	color: #7f1d1d;
+	font-weight: 900;
+}
+
+html[data-theme="dark"] .admin-expiry-expired {
+	background: rgba(248, 113, 113, 0.12);
+	border-color: rgba(248, 113, 113, 0.30);
+	color: #fca5a5;
+}

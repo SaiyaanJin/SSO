@@ -229,6 +229,41 @@ export default function AdminConsole() {
 		);
 	};
 
+	const pwdExpiryBody = (rowData) => {
+		const days = rowData.PwdExpiry;
+
+		// null means the password never expires (DONT_EXPIRE_PASSWORD flag or domain policy = never)
+		if (days === null || days === undefined) {
+			return (
+				<span className="admin-expiry-badge admin-expiry-never">
+					<i className="pi pi-infinity" style={{ fontSize: "0.65rem" }} />
+					&nbsp;Never
+				</span>
+			);
+		}
+
+		if (days === 0) {
+			return (
+				<span className="admin-expiry-badge admin-expiry-expired">
+					<i className="pi pi-times-circle" style={{ fontSize: "0.65rem" }} />
+					&nbsp;Expired
+				</span>
+			);
+		}
+
+		const cls =
+			days <= 3  ? "admin-expiry-critical" :
+			days <= 7  ? "admin-expiry-warning"  :
+			days <= 30 ? "admin-expiry-soon"     :
+			             "admin-expiry-ok";
+
+		return (
+			<span className={`admin-expiry-badge ${cls}`}>
+				{days}d
+			</span>
+		);
+	};
+
 	// ── Per-row action menu ───────────────────────────────────────────────
 	const actionMenuRef = useRef(null);
 	const [menuItems,    setMenuItems]    = useState([]);
@@ -382,7 +417,7 @@ export default function AdminConsole() {
 					value={users}
 					loading={loading}
 					filters={filters}
-					globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile", "Status"]}
+					globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile", "Status", "PwdExpiry"]}
 					header={tableHeader}
 					emptyMessage={
 						<div className="admin-empty">
@@ -405,8 +440,9 @@ export default function AdminConsole() {
 					<Column field="Department" header="Department"      body={deptBody}   sortable style={{ width: "20%" }} />
 					<Column field="Mail"       header="E-Mail Address"  body={mailBody}   sortable style={{ width: "22%" }} />
 					<Column field="Mobile"     header="Phone"           sortable          style={{ width: "12%" }} />
-					<Column field="Status"     header="Status"          body={statusBody} sortable align="center" style={{ width: "10%" }} />
-					<Column header="Actions"   body={actionBody}        align="center"    style={{ width: "130px", minWidth: "130px" }} />
+					<Column field="Status"     header="Status"          body={statusBody}    sortable align="center" style={{ width: "9%" }} />
+					<Column field="PwdExpiry"  header="Pwd Expiry"       body={pwdExpiryBody} sortable align="center" style={{ width: "9%" }} />
+					<Column header="Actions"   body={actionBody}         align="center"       style={{ width: "130px", minWidth: "130px" }} />
 				</DataTable>
 			</section>
 
