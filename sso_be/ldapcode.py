@@ -57,9 +57,77 @@ logged_out_users = set()
 # In-memory OTP store: { username: { otp, email, expires_at, created_at, attempts } }
 otp_store = {}
 
-# In-memory employee directory cache
-_EMP_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
-_emp_cache: dict = {"data": None, "cached_at": 0.0}
+# ---------------------------------------------------------------------------
+#  In-memory TTL cache (no external deps — thread-safe via threading.Lock)
+# ---------------------------------------------------------------------------
+
+class _TTLCache:
+    """A simple {key -> (value, stored_at)} dict with per-entry TTL.
+
+    Thread-safe: a single lock guards all reads and writes.
+    """
+
+    def __init__(self, default_ttl: float):
+        self._ttl = default_ttl
+        self._store: dict = {}
+        self._lock = threading.Lock()
+
+    def get(self, key, ttl: float = None):
+        """Return cached value if still fresh, else None."""
+        ttl = ttl if ttl is not None else self._ttl
+        with self._lock:
+            entry = self._store.get(key)
+            if entry and (time.time() - entry[1]) < ttl:
+                return entry[0]
+            return None
+
+    def set(self, key, value):
+        with self._lock:
+            self._store[key] = (value, time.time())
+
+    def delete(self, key):
+        with self._lock:
+            self._store.pop(key, None)
+
+    def clear(self):
+        with self._lock:
+            self._store.clear()
+
+    def age(self, key) -> float:
+        """Seconds since the entry was stored, or inf if absent."""
+        with self._lock:
+            entry = self._store.get(key)
+            return time.time() - entry[1] if entry else float("inf")
+
+
+# -- Employee directory cache (24 h) ----------------------------------------
+_EMP_CACHE_TTL = 24 * 60 * 60  # seconds
+_emp_cache: dict = {"data": None, "cached_at": 0.0}   # kept as-is (existing logic)
+
+# -- Per-user password-expiry cache (24 h) ----------------------------------
+_PWD_EXPIRY_CACHE_TTL = 24 * 60 * 60   # 24 hours
+_pwd_expiry_cache = _TTLCache(default_ttl=_PWD_EXPIRY_CACHE_TTL)
+
+# -- Admin stats cache (15 min) ---------------------------------------------
+_ADMIN_STATS_CACHE_TTL = 15 * 60        # 15 minutes
+_admin_stats_cache = _TTLCache(default_ttl=_ADMIN_STATS_CACHE_TTL)
+
+# -- Admin user-list cache (5 min) ------------------------------------------
+_ADMIN_USERS_CACHE_TTL = 5 * 60         # 5 minutes
+_admin_users_cache = _TTLCache(default_ttl=_ADMIN_USERS_CACHE_TTL)
+
+
+def _invalidate_admin_caches(username: str = None):
+    """Call after any user-mutating admin action to flush stale data.
+
+    Clears both the stats and user-list caches (they cover all users).
+    If *username* is given the per-user password-expiry entry is also dropped.
+    """
+    _admin_stats_cache.clear()
+    _admin_users_cache.clear()
+    if username:
+        _pwd_expiry_cache.delete(username)
+    logger.debug("Admin caches invalidated (username=%s)", username)
 
 DEPARTMENT_MAP = {
     "IT": "Information Technology (IT)",
@@ -883,6 +951,8 @@ def forgot_password_reset():
             return json_error(error_msg, 400)
 
         logger.info("Password reset via OTP for %s", username)
+        # Invalidate cached expiry so next login gets fresh LDAP data
+        _pwd_expiry_cache.delete(username)
         return jsonify({"status": "success", "message": "Password reset successfully"})
 
     except ldap.LDAPError as exc:
@@ -1008,6 +1078,9 @@ def get_password_expiry_days(username):
 def password_expiry():
     """Return how many days remain before the logged-in user's password expires.
 
+    Result is cached per-user for 24 hours and invalidated whenever the user
+    (or an admin) resets their password.
+
     Frontend sends the standard Bearer token in the ``Token`` header.
     Response JSON:
         { "days_remaining": <int|null>, "never_expires": <bool> }
@@ -1017,17 +1090,33 @@ def password_expiry():
     if not username:
         return json_error("Could not determine user from token", 400)
 
+    # --- Cache read ---
+    cached = _pwd_expiry_cache.get(username)
+    if cached is not None:
+        age_s = int(_pwd_expiry_cache.age(username))
+        logger.debug("password_expiry: cache hit for %s (age %ds)", username, age_s)
+        resp = jsonify(cached)
+        resp.headers["X-Cache"] = f"HIT age={age_s}s"
+        return resp
+
+    # --- Cache miss: query LDAP ---
     days, err = get_password_expiry_days(username)
     if err:
         logger.warning("password_expiry check failed for %s: %s", username, err)
-        # Return a graceful response so the UI doesn't break
+        # Do NOT cache errors — let the next request retry LDAP
         return jsonify({"days_remaining": None, "never_expires": False, "error": err})
 
     never_expires = days is None
-    return jsonify({
-        "days_remaining": days,
-        "never_expires": never_expires,
-    })
+    payload = {"days_remaining": days, "never_expires": never_expires}
+
+    # Cache only clean results
+    _pwd_expiry_cache.set(username, payload)
+    logger.debug("password_expiry: cached result for %s (days=%s)", username, days)
+
+    resp = jsonify(payload)
+    resp.headers["X-Cache"] = "MISS"
+    return resp
+
 
 
 @app.route("/visit", methods=["GET", "POST"])
@@ -1468,6 +1557,15 @@ def _performer_from_request():
 @app.route("/admin/users", methods=["GET"])
 @require_it_admin
 def admin_get_users():
+    # --- Cache read (5-min TTL) ---
+    cached = _admin_users_cache.get("all")
+    if cached is not None:
+        age_s = int(_admin_users_cache.age("all"))
+        logger.debug("admin_get_users: cache hit (age %ds)", age_s)
+        resp = jsonify(cached)
+        resp.headers["X-Cache"] = f"HIT age={age_s}s"
+        return resp
+
     conn = None
     try:
         conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
@@ -1566,7 +1664,14 @@ def admin_get_users():
                 "Locked":     locked,
                 "PwdExpiry":  pwd_expiry_days,  # int (days left) | null
             })
-        return jsonify(users)
+
+        # --- Cache write ---
+        _admin_users_cache.set("all", users)
+        logger.debug("admin_get_users: cached %d users", len(users))
+
+        resp = jsonify(users)
+        resp.headers["X-Cache"] = "MISS"
+        return resp
     except Exception as exc:
         return json_error(f"Failed to fetch users: {exc}", 500)
     finally:
@@ -1611,6 +1716,8 @@ def admin_create_user():
             ("Phone",       phone or "Not provided"),
         ],
     )
+    # Invalidate admin caches so list refreshes
+    _invalidate_admin_caches()
     return jsonify({"status": "success", "message": "User created successfully"})
 
 @app.route("/admin/users/<username>", methods=["PUT"])
@@ -1692,6 +1799,8 @@ def admin_modify_user(username):
             old.get("dept", "Unknown"),
             diff_rows,
         )
+        # Invalidate admin caches
+        _invalidate_admin_caches(username)
         return jsonify({"status": "success", "message": "User modified successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1721,6 +1830,8 @@ def admin_delete_user(username):
             target_name, username, target_dept,
             [("Action", "Permanently deleted from Active Directory")],
         )
+        # Invalidate admin caches
+        _invalidate_admin_caches(username)
         return jsonify({"status": "success", "message": "User deleted successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1762,6 +1873,8 @@ def admin_reset_password(username):
                 ("Note",     "New password was set — value not logged for security"),
             ],
         )
+        # Invalidate caches for this user
+        _invalidate_admin_caches(username)
         return jsonify({"status": "success", "message": "Password reset successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1797,6 +1910,8 @@ def admin_toggle_status(username):
                                 "Active"   if enable      else "Disabled")],
         )
         status_msg = "enabled" if enable else "disabled"
+        # Invalidate admin caches (status changed)
+        _invalidate_admin_caches(username)
         return jsonify({"status": "success", "message": f"User {status_msg} successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1832,6 +1947,8 @@ def admin_unlock_user(username):
                 ("Lockout Status", "Locked (repeated failed login attempts)", "Unlocked"),
             ],
         )
+        # Invalidate admin caches (locked status changed)
+        _invalidate_admin_caches(username)
         return jsonify({"status": "success", "message": "Account unlocked successfully"})
     except Exception as exc:
         return json_error(f"Error: {exc}", 500)
@@ -1879,7 +1996,9 @@ def admin_force_password_change(username):
             [("Action", "Force password change flagged — user must change at next login", "")],
         )
         logger.info("Force-password-change set for %s by admin", username)
-        return jsonify({"status": "success", "message": "User will be required to change password at next login"})
+        # Invalidate admin caches
+        _invalidate_admin_caches(username)
+        return jsonify({"status": "success", "message": "User will be required to change password at next login."})
     except Exception as exc:
         logger.exception("force-password-change failed for %s", username)
         return json_error(f"Error: {exc}", 500)
@@ -2064,6 +2183,15 @@ def admin_user_detail(username):
 @require_it_admin
 def admin_stats():
     """Return aggregate statistics for the Admin Console dashboard."""
+    # --- Cache read (15-min TTL) ---
+    cached = _admin_stats_cache.get("stats")
+    if cached is not None:
+        age_s = int(_admin_stats_cache.age("stats"))
+        logger.debug("admin_stats: cache hit (age %ds)", age_s)
+        resp = jsonify(cached)
+        resp.headers["X-Cache"] = f"HIT age={age_s}s"
+        return resp
+
     conn = None
     try:
         conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
@@ -2161,7 +2289,7 @@ def admin_stats():
                 elif pwd_days <= 30:
                     expiring_30 += 1
 
-        return jsonify({
+        payload = {
             "total":        total,
             "active":       active,
             "disabled":     disabled,
@@ -2174,7 +2302,14 @@ def admin_stats():
                 [{"dept": k, "count": v} for k, v in dept_counts.items()],
                 key=lambda x: -x["count"],
             ),
-        })
+        }
+        # --- Cache write ---
+        _admin_stats_cache.set("stats", payload)
+        logger.debug("admin_stats: cached fresh stats")
+
+        resp = jsonify(payload)
+        resp.headers["X-Cache"] = "MISS"
+        return resp
     except Exception as exc:
         logger.exception("admin_stats failed")
         return json_error(f"Error: {exc}", 500)
