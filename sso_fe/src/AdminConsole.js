@@ -10,6 +10,7 @@ import { Dialog } from "primereact/dialog";
 import { InputText } from "primereact/inputtext";
 import { Dropdown } from "primereact/dropdown";
 import { Menu } from "primereact/menu";
+import { Toast } from "primereact/toast";
 import { FilterMatchMode } from "primereact/api";
 import GILogo from "./staticFiles/GILogo.png";
 import "./AdminConsole.css";
@@ -39,15 +40,43 @@ export default function AdminConsole() {
 	const [filters, setFilters] = useState({ global: { value: null, matchMode: FilterMatchMode.CONTAINS } });
 
 	// Dialog visibility
-	const [userDialog,    setUserDialog]    = useState(false);
-	const [pwdDialog,     setPwdDialog]     = useState(false);
-	const [delDialog,     setDelDialog]     = useState(false);
-	const [unlockDialog,  setUnlockDialog]  = useState(false);
+	const [userDialog,         setUserDialog]         = useState(false);
+	const [pwdDialog,          setPwdDialog]          = useState(false);
+	const [delDialog,          setDelDialog]          = useState(false);
+	const [unlockDialog,       setUnlockDialog]       = useState(false);
+	const [detailDialog,       setDetailDialog]       = useState(false);
+	const [forceChangeDialog,  setForceChangeDialog]  = useState(false);
+	const [sendOtpDialog,      setSendOtpDialog]      = useState(false);
 
 	const [selectedUser, setSelectedUser] = useState(null);
 	const [formData, setFormData]         = useState(EMPTY_FORM);
 	const [isEdit, setIsEdit]             = useState(false);
 	const [submitting, setSubmitting]     = useState(false);
+
+	// New feature state
+	const [quickFilter,   setQuickFilter]   = useState("all");
+	const [deptFilter,    setDeptFilter]    = useState(null);
+	const [detailData,    setDetailData]    = useState(null);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [otpResult,     setOtpResult]     = useState(null);
+	const [lastRefresh,   setLastRefresh]   = useState(null); // Date object
+	const [copiedId,      setCopiedId]      = useState(null); // tracks which cell just copied
+
+	const toastRef = useRef(null);
+
+	// Helper: show toast instead of alert()
+	const toast = useCallback((severity, summary, detail) => {
+		toastRef.current?.show({ severity, summary, detail, life: 4000 });
+	}, []);
+
+	// Helper: copy text to clipboard with visual feedback
+	const copyToClipboard = (text, id) => {
+		navigator.clipboard?.writeText(text).then(() => {
+			setCopiedId(id);
+			setTimeout(() => setCopiedId(null), 1800);
+			toast("success", "Copied!", `"${text}" copied to clipboard`);
+		});
+	};
 
 	// ── Auth guard ──────────────────────────────────────────────────────
 	useEffect(() => {
@@ -71,14 +100,17 @@ export default function AdminConsole() {
 		try {
 			const res = await axios.get(`${API_BASE}/admin/users`, getHeaders());
 			setUsers(res.data);
+			setLastRefresh(new Date());
 		} catch (err) {
 			if (err.response?.status === 401 || err.response?.status === 403) {
 				navigate("/dashboard");
+			} else {
+				toast("error", "Load Failed", "Could not fetch user list. Check network or backend.");
 			}
 		} finally {
 			setLoading(false);
 		}
-	}, [getHeaders, navigate]);
+	}, [getHeaders, navigate, toast]);
 
 	useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -89,10 +121,25 @@ export default function AdminConsole() {
 		setGlobalFilterValue(value);
 	};
 
+	// Filtered user list based on quick-filter pill + dept dropdown
+	const filteredUsers = users.filter(u => {
+		if (deptFilter && u.Department !== deptFilter) return false;
+		switch (quickFilter) {
+			case "active":   return u.Status === "Active";
+			case "disabled": return u.Status === "Disabled";
+			case "locked":   return u.Locked;
+			case "expiring": return u.PwdExpiry !== null && u.PwdExpiry !== undefined && u.PwdExpiry > 0 && u.PwdExpiry <= 7;
+			case "expired":  return u.PwdExpiry === 0;
+			default:         return true;
+		}
+	});
+
 	// ── Dialog helpers ──────────────────────────────────────────────────
 	const hideAll = () => {
 		setUserDialog(false); setPwdDialog(false); setDelDialog(false); setUnlockDialog(false);
+		setDetailDialog(false); setForceChangeDialog(false); setSendOtpDialog(false);
 		setSelectedUser(null); setFormData(EMPTY_FORM); setSubmitting(false);
+		setOtpResult(null);
 	};
 
 	const openNewUser = () => {
@@ -124,23 +171,27 @@ export default function AdminConsole() {
 		try {
 			if (isEdit) {
 				await axios.put(`${API_BASE}/admin/users/${selectedUser.Emp_id}`, formData, getHeaders());
+				toast("success", "User Updated", `${formData.name || selectedUser.Name} has been updated successfully.`);
 			} else {
 				await axios.post(`${API_BASE}/admin/users`, formData, getHeaders());
+				toast("success", "User Created", `${formData.name} has been added to Active Directory.`);
 			}
 			hideAll(); fetchUsers();
 		} catch (err) {
-			alert("Error: " + (err.response?.data?.error || err.message));
+			toast("error", "Save Failed", err.response?.data?.error || err.message);
 			setSubmitting(false);
 		}
 	};
 
 	const handleDeleteUser = async () => {
 		setSubmitting(true);
+		const name = selectedUser.Name;
 		try {
 			await axios.delete(`${API_BASE}/admin/users/${selectedUser.Emp_id}`, getHeaders());
+			toast("warn", "User Deleted", `${name} has been permanently removed from Active Directory.`);
 			hideAll(); fetchUsers();
 		} catch (err) {
-			alert("Error: " + (err.response?.data?.error || err.message));
+			toast("error", "Delete Failed", err.response?.data?.error || err.message);
 			setSubmitting(false);
 		}
 	};
@@ -149,10 +200,10 @@ export default function AdminConsole() {
 		setSubmitting(true);
 		try {
 			await axios.post(`${API_BASE}/admin/users/${selectedUser.Emp_id}/reset-password`, { password: formData.password }, getHeaders());
-			alert("Password reset successfully.");
+			toast("success", "Password Reset", `Password for ${selectedUser.Name} has been reset successfully.`);
 			hideAll();
 		} catch (err) {
-			alert("Error: " + (err.response?.data?.error || err.message));
+			toast("error", "Reset Failed", err.response?.data?.error || err.message);
 			setSubmitting(false);
 		}
 	};
@@ -161,9 +212,10 @@ export default function AdminConsole() {
 		const enable = user.Status === "Disabled";
 		try {
 			await axios.post(`${API_BASE}/admin/users/${user.Emp_id}/toggle-status`, { enable }, getHeaders());
+			toast("success", enable ? "Account Enabled" : "Account Disabled", `${user.Name} is now ${enable ? "active" : "disabled"}.`);
 			fetchUsers();
 		} catch (err) {
-			alert("Error: " + (err.response?.data?.error || err.message));
+			toast("error", "Action Failed", err.response?.data?.error || err.message);
 		}
 	};
 
@@ -171,11 +223,87 @@ export default function AdminConsole() {
 		setSubmitting(true);
 		try {
 			await axios.post(`${API_BASE}/admin/users/${selectedUser.Emp_id}/unlock`, {}, getHeaders());
-			alert(`Account for ${selectedUser.Name} has been unlocked successfully.`);
+			toast("success", "Account Unlocked", `${selectedUser.Name}'s account lockout has been cleared.`);
 			hideAll(); fetchUsers();
 		} catch (err) {
-			alert("Error: " + (err.response?.data?.error || err.message));
+			toast("error", "Unlock Failed", err.response?.data?.error || err.message);
 			setSubmitting(false);
+		}
+	};
+
+	const openDetailPanel = async (user) => {
+		setSelectedUser(user);
+		setDetailData(null);
+		setDetailDialog(true);
+		setDetailLoading(true);
+		try {
+			const res = await axios.get(`${API_BASE}/admin/users/${user.Emp_id}/detail`, getHeaders());
+			setDetailData(res.data);
+		} catch (err) {
+			setDetailData({ error: err.response?.data?.error || err.message });
+		} finally {
+			setDetailLoading(false);
+		}
+	};
+
+	const handleForcePasswordChange = async () => {
+		setSubmitting(true);
+		try {
+			await axios.post(`${API_BASE}/admin/users/${selectedUser.Emp_id}/force-password-change`, {}, getHeaders());
+			toast("warn", "Force Change Set", `${selectedUser.Name} will be prompted to change their password at next login.`);
+			hideAll(); fetchUsers();
+		} catch (err) {
+			toast("error", "Action Failed", err.response?.data?.error || err.message);
+			setSubmitting(false);
+		}
+	};
+
+	const handleSendResetOtp = async () => {
+		setSubmitting(true);
+		try {
+			const res = await axios.post(`${API_BASE}/admin/users/${selectedUser.Emp_id}/send-reset-otp`, {}, getHeaders());
+			setOtpResult(res.data);
+			setSubmitting(false);
+		} catch (err) {
+			toast("error", "OTP Failed", err.response?.data?.error || err.message);
+			setSubmitting(false);
+		}
+	};
+
+	const handleExportCsv = async () => {
+		toast("info", "Exporting…", "Preparing CSV, download will start shortly.");
+		try {
+			const res = await axios.get(`${API_BASE}/admin/export`, {
+				...getHeaders(),
+				responseType: "blob",   // tells axios to give us raw bytes, not parsed JSON
+			});
+			// Pull filename from Content-Disposition if present, otherwise use default
+			const disposition = res.headers["content-disposition"] || "";
+			const match = disposition.match(/filename="?([^"]+)"?/);
+			const filename = match ? match[1] : `ERLDC_AD_Users_${new Date().toISOString().slice(0,10)}.csv`;
+
+			const url = URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+			toast("success", "Export Complete", `Downloaded: ${filename}`);
+		} catch (err) {
+			// When axios gets a non-2xx with responseType:blob, parse the error body manually
+			let msg = "Could not generate CSV. Please try again.";
+			if (err.response?.data instanceof Blob) {
+				try {
+					const text = await err.response.data.text();
+					const parsed = JSON.parse(text);
+					msg = parsed.error || msg;
+				} catch { /* ignore */ }
+			} else {
+				msg = err.response?.data?.error || err.message || msg;
+			}
+			toast("error", "Export Failed", msg);
 		}
 	};
 
@@ -184,6 +312,8 @@ export default function AdminConsole() {
 	const activeUsers   = users.filter(u => u.Status === "Active").length;
 	const disabledUsers = users.filter(u => u.Status === "Disabled").length;
 	const lockedUsers   = users.filter(u => u.Locked).length;
+	const expiringUsers = users.filter(u => u.PwdExpiry !== null && u.PwdExpiry !== undefined && u.PwdExpiry > 0 && u.PwdExpiry <= 7).length;
+	const expiredUsers  = users.filter(u => u.PwdExpiry === 0).length;
 
 	// ── Cell templates ───────────────────────────────────────────────────
 	const rowNumBody = (_, opts) => (
@@ -191,26 +321,44 @@ export default function AdminConsole() {
 	);
 
 	const nameBody = (rowData) => (
-		<span className="admin-name-cell">
+		<span className="admin-name-cell admin-name-clickable" onClick={() => openDetailPanel(rowData)} title="Click to view full profile">
 			<i className="pi pi-user" />
 			{rowData.Name}
+			<i className="pi pi-external-link" style={{ fontSize: "0.6rem", opacity: 0.5 }} />
 		</span>
 	);
 
-	const empidBody = (rowData) => (
-		<code className="admin-empid">{rowData.Emp_id}</code>
-	);
+	const empidBody = (rowData) => {
+		const id = rowData.Emp_id;
+		const copied = copiedId === `id-${id}`;
+		return (
+			<span className="admin-copy-cell" onClick={() => copyToClipboard(id, `id-${id}`)} title="Click to copy">
+				<code className="admin-empid">{id}</code>
+				<i className={`pi ${copied ? "pi-check" : "pi-copy"} admin-copy-icon${copied ? " admin-copy-icon--ok" : ""}`} />
+			</span>
+		);
+	};
 
 	const deptBody = (rowData) => (
 		<span className="admin-dept-badge">{rowData.Department}</span>
 	);
 
-	const mailBody = (rowData) => (
-		<a href={`mailto:${rowData.Mail}`} className="admin-mail-link">
-			<i className="pi pi-envelope" />
-			{rowData.Mail}
-		</a>
-	);
+	const mailBody = (rowData) => {
+		const mail = rowData.Mail;
+		const copied = copiedId === `mail-${mail}`;
+		return (
+			<span className="admin-copy-cell">
+				<a href={`mailto:${mail}`} className="admin-mail-link" onClick={e => e.stopPropagation()}>
+					<i className="pi pi-envelope" />
+					{mail}
+				</a>
+				<i className={`pi ${copied ? "pi-check" : "pi-copy"} admin-copy-icon${copied ? " admin-copy-icon--ok" : ""}`}
+					onClick={() => copyToClipboard(mail, `mail-${mail}`)}
+					title="Copy email"
+				/>
+			</span>
+		);
+	};
 
 	const statusBody = (rowData) => {
 		const isActive = rowData.Status === "Active";
@@ -272,11 +420,12 @@ export default function AdminConsole() {
 		const handleActionsClick = (e) => {
 			const isActive = rowData.Status === "Active";
 			const items = [
-				{ label: "Edit User Details", icon: "pi pi-pencil", command: () => openEditUser(rowData) },
-				{ label: "Reset Password",    icon: "pi pi-key",    command: () => openResetPwd(rowData) },
+				{ label: "View Full Profile", icon: "pi pi-id-card",  command: () => openDetailPanel(rowData) },
+				{ label: "Edit User Details", icon: "pi pi-pencil",   command: () => openEditUser(rowData) },
+				{ label: "Reset Password",    icon: "pi pi-key",      command: () => openResetPwd(rowData) },
+				{ label: "Force Pwd Change",  icon: "pi pi-refresh",  className: "action-menu-disable", command: () => { setSelectedUser(rowData); setForceChangeDialog(true); } },
+				{ label: "Send Reset OTP",    icon: "pi pi-envelope", className: "action-menu-enable",  command: () => { setSelectedUser(rowData); setOtpResult(null); setSendOtpDialog(true); } },
 				{ separator: true },
-				// Unlock Account — always visible; disabled+greyed when not locked,
-				// amber+clickable when the account is locked out.
 				{
 					label:     "Unlock Account",
 					icon:      "pi pi-lock-open",
@@ -313,28 +462,100 @@ export default function AdminConsole() {
 	};
 
 	// ── Table toolbar ─────────────────────────────────────────────────────
+	const deptFilterOptions = [
+		{ label: "All Departments", value: null },
+		...DEPARTMENTS.map(d => ({ label: d.label, value: d.label })),
+	];
+
+	const refreshLabel = lastRefresh
+		? `Updated ${lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
+		: "";
+
 	const tableHeader = (
-		<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid rgba(220,38,38,0.10)", background: "rgba(255,255,255,0.94)", backdropFilter: "blur(12px)" }}>
-			<Button
-				label="Add New User"
-				icon="pi pi-user-plus"
-				className="admin-add-btn"
-				onClick={openNewUser}
-			/>
-			<span className="admin-search">
-				<i className="pi pi-search" style={{ color: "#94a3b8" }} />
-				<InputText
-					value={globalFilterValue}
-					onChange={onGlobalFilterChange}
-					placeholder="Search by name, ID, department, email…"
-					className="admin-search-input"
-				/>
-			</span>
+		<div style={{ background: "rgba(255,255,255,0.94)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(220,38,38,0.10)" }}>
+			<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", gap: 10, flexWrap: "wrap" }}>
+				<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+					<Button label="Add New User" icon="pi pi-user-plus" className="admin-add-btn" onClick={openNewUser} />
+					<Button label="Export CSV" icon="pi pi-download" className="admin-export-btn" onClick={handleExportCsv} />
+					<Button
+						icon={loading ? "pi pi-spin pi-spinner" : "pi pi-refresh"}
+						className="admin-refresh-btn"
+						onClick={fetchUsers}
+						disabled={loading}
+						title={refreshLabel || "Refresh user list"}
+					/>
+					{refreshLabel && <span className="admin-refresh-ts"><i className="pi pi-clock" />{refreshLabel}</span>}
+				</div>
+				<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+					<Dropdown value={deptFilter} options={deptFilterOptions} onChange={e => setDeptFilter(e.value)} placeholder="All Departments" className="admin-dept-filter" />
+					<span className="admin-search">
+						<i className="pi pi-search" style={{ color: "#94a3b8" }} />
+						<InputText value={globalFilterValue} onChange={onGlobalFilterChange} placeholder="Search name, ID, dept, email…" className="admin-search-input" />
+						{globalFilterValue && (
+							<i className="pi pi-times" style={{ color: "#94a3b8", cursor: "pointer" }}
+								onClick={() => { setGlobalFilterValue(""); setFilters(f => ({ ...f, global: { value: null, matchMode: FilterMatchMode.CONTAINS } })); }}
+								title="Clear search"
+							/>
+						)}
+					</span>
+				</div>
+			</div>
+			<div className="admin-quick-filters">
+				{[
+					{ key: "all",      label: "All",          count: totalUsers },
+					{ key: "active",   label: "Active",       count: activeUsers },
+					{ key: "disabled", label: "Disabled",     count: disabledUsers },
+					{ key: "locked",   label: "Locked Out",   count: lockedUsers },
+					{ key: "expiring", label: "Expiring ≤7d", count: expiringUsers },
+					{ key: "expired",  label: "Pwd Expired",  count: expiredUsers },
+				].map(f => (
+					<button key={f.key} type="button"
+						className={`admin-qf-pill ${quickFilter === f.key ? "admin-qf-pill--active" : ""}`}
+						onClick={() => setQuickFilter(f.key)}>
+						{f.label}
+						<span className="admin-qf-count">{loading ? "—" : f.count}</span>
+					</button>
+				))}
+			</div>
 		</div>
 	);
 
+	// ── Row class for tinting ────────────────────────────────────────────
+	const rowClassName = (rowData) => {
+		if (rowData.Locked)                                                           return "admin-row--locked";
+		if (rowData.Status === "Disabled")                                            return "admin-row--disabled";
+		if (rowData.PwdExpiry === 0)                                                  return "admin-row--expired";
+		if (rowData.PwdExpiry !== null && rowData.PwdExpiry !== undefined && rowData.PwdExpiry <= 3) return "admin-row--critical";
+		if (rowData.PwdExpiry !== null && rowData.PwdExpiry !== undefined && rowData.PwdExpiry <= 7) return "admin-row--expiring";
+		return "";
+	};
+
+	// ── Contextual empty state ───────────────────────────────────────────
+	const emptyMessages = {
+		all:      { icon: "pi-users",        text: "No users found in Active Directory." },
+		active:   { icon: "pi-check-circle", text: "No active accounts found." },
+		disabled: { icon: "pi-ban",          text: "No disabled accounts — all accounts are active.", good: true },
+		locked:   { icon: "pi-lock",         text: "No locked accounts — all clear!",                 good: true },
+		expiring: { icon: "pi-clock",        text: "No passwords expiring within 7 days — all clear!", good: true },
+		expired:  { icon: "pi-times-circle", text: "No expired passwords — all clear!",               good: true },
+	};
+	const em = emptyMessages[quickFilter] || emptyMessages.all;
+	const emptyMessage = (
+		<div className={`admin-empty${em.good ? " admin-empty--good" : ""}`}>
+			<i className={`pi ${em.icon}`} />
+			<p>{em.text}</p>
+			{quickFilter !== "all" && (
+				<button type="button" className="admin-empty-reset" onClick={() => setQuickFilter("all")}>
+					<i className="pi pi-arrow-left" /> Show all accounts
+				</button>
+			)}
+		</div>
+	);
+
+
 	return (
 		<main className="admin-shell">
+			<Toast ref={toastRef} position="top-right" />
 			{/* ── Nav ─────────────────────────────────────────────────── */}
 			<nav className="admin-nav" aria-label="Admin Console navigation">
 				<div className="admin-nav__brand">
@@ -375,22 +596,26 @@ export default function AdminConsole() {
 					</div>
 				</div>
 				<div className="admin-hero-stats">
-					<div className="admin-hero-stat">
-						<span>{loading ? "—" : totalUsers}</span>
-						<p>Total Accounts</p>
-					</div>
-					<div className="admin-hero-stat">
-						<span style={{ color: "#86efac" }}>{loading ? "—" : activeUsers}</span>
-						<p>Active</p>
-					</div>
-					<div className="admin-hero-stat">
-						<span style={{ color: "#fca5a5" }}>{loading ? "—" : disabledUsers}</span>
-						<p>Disabled</p>
-					</div>
-					<div className="admin-hero-stat">
-						<span style={{ color: "#fbbf24" }}>{loading ? "—" : lockedUsers}</span>
-						<p>Locked Out</p>
-					</div>
+					{[
+						{ key: "all",      label: "Total Accounts", count: totalUsers,    color: null },
+						{ key: "active",   label: "Active",         count: activeUsers,   color: "#86efac" },
+						{ key: "disabled", label: "Disabled",        count: disabledUsers, color: "#fca5a5" },
+						{ key: "locked",   label: "Locked Out",      count: lockedUsers,   color: "#fbbf24" },
+						{ key: "expiring", label: "Expiring ≤7d",    count: expiringUsers, color: "#f97316" },
+						{ key: "expired",  label: "Pwd Expired",     count: expiredUsers,  color: "#f87171" },
+					].map(stat => (
+						<button
+							key={stat.key}
+							type="button"
+							className={`admin-hero-stat admin-hero-stat--btn${quickFilter === stat.key ? " admin-hero-stat--active" : ""}`}
+							onClick={() => setQuickFilter(stat.key)}
+							title={`Filter table: ${stat.label}`}
+						>
+							<span style={stat.color ? { color: stat.color } : {}}>{loading ? "—" : stat.count}</span>
+							<p>{stat.label}</p>
+							{quickFilter === stat.key && <span className="admin-hero-stat__indicator">▼ Filtering</span>}
+						</button>
+					))}
 				</div>
 			</section>
 
@@ -399,9 +624,26 @@ export default function AdminConsole() {
 				<div className="admin-section-heading">
 					<div>
 						<p>Restricted — IT Department Only</p>
-						<h2>User Directory</h2>
+						<h2>
+							User Directory
+							{quickFilter !== "all" && (
+								<span className="admin-filter-crumb">
+									<i className="pi pi-filter-fill" />
+									{{
+										active:   "Active accounts",
+										disabled: "Disabled accounts",
+										locked:   "Locked-out accounts",
+										expiring: "Expiring within 7 days",
+										expired:  "Password expired",
+									}[quickFilter]}
+									<button type="button" className="admin-filter-crumb__clear" onClick={() => setQuickFilter("all")} title="Clear filter">
+										<i className="pi pi-times" />
+									</button>
+								</span>
+							)}
+						</h2>
 					</div>
-					<span>{loading ? "" : `${totalUsers} accounts`}</span>
+					<span>{loading ? "" : `${filteredUsers.length} of ${totalUsers} accounts`}</span>
 				</div>
 
 				{/* Single shared popup menu for all action triggers */}
@@ -414,17 +656,13 @@ export default function AdminConsole() {
 				/>
 
 				<DataTable
-					value={users}
+					value={filteredUsers}
 					loading={loading}
 					filters={filters}
 					globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile", "Status", "PwdExpiry"]}
 					header={tableHeader}
-					emptyMessage={
-						<div className="admin-empty">
-							<i className="pi pi-search" />
-							<p>No users match the search criteria.</p>
-						</div>
-					}
+					emptyMessage={emptyMessage}
+					rowClassName={rowClassName}
 					paginator
 					rows={15}
 					rowsPerPageOptions={[15, 30, 50]}
@@ -594,6 +832,123 @@ export default function AdminConsole() {
 						loading={submitting}
 					/>
 				</div>
+			</Dialog>
+
+			{/* ── User Detail Panel ──────────────────────────────────── */}
+			<Dialog
+				visible={detailDialog}
+				style={{ width: "560px" }}
+				header={
+					<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+						<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.18)", fontSize: "1.2rem" }}>
+							<i className="pi pi-id-card" style={{ color: "#fff" }} />
+						</span>
+						<span style={{ color: "#fff", fontWeight: 900 }}>Full Profile — {selectedUser?.Name}</span>
+					</div>
+				}
+				modal
+				className="admin-dialog"
+				onHide={hideAll}
+			>
+				{detailLoading && <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}><i className="pi pi-spin pi-spinner" style={{ fontSize: "2rem" }} /></div>}
+				{detailData?.error && <div style={{ padding: "20px", color: "#dc2626" }}>Error: {detailData.error}</div>}
+				{detailData && !detailData.error && (
+					<div className="admin-detail-grid">
+						{[
+							["Employee ID", detailData.Emp_id, "pi-id-badge"],
+							["Full Name", detailData.Name, "pi-user"],
+							["Department", detailData.Department, "pi-building"],
+							["Job Title", detailData.Title || "—", "pi-briefcase"],
+							["Email", detailData.Mail || "—", "pi-envelope"],
+							["Phone", detailData.Mobile || "—", "pi-phone"],
+							["Account Status", detailData.Status + (detailData.Locked ? " (Locked)" : ""), "pi-shield"],
+							["Pwd Expiry", detailData.PwdExpiry !== null && detailData.PwdExpiry !== undefined ? `${detailData.PwdExpiry} day(s)` : (detailData.NeverExpires ? "Never Expires" : "Unknown"), "pi-clock"],
+							["Pwd Last Set", detailData.PwdLastSet || "—", "pi-key"],
+							["Must Change Pwd", detailData.MustChangePwd ? "Yes — at next login" : "No", "pi-refresh"],
+							["Failed Login Attempts", detailData.BadPwdCount || "0", "pi-times-circle"],
+							["Last Bad Pwd Time", detailData.BadPwdTime || "—", "pi-calendar-times"],
+							["Last Logon", detailData.LastLogon || "Never recorded", "pi-sign-in"],
+							["Account Created", detailData.WhenCreated || "—", "pi-plus-circle"],
+							["Description", detailData.Description || "—", "pi-info-circle"],
+						].map(([label, val, icon]) => (
+							<div key={label} className="admin-detail-row">
+								<span className="admin-detail-label"><i className={`pi ${icon}`} />&nbsp;{label}</span>
+								<span className="admin-detail-val">{val}</span>
+							</div>
+						))}
+						{detailData.Groups?.length > 0 && (
+							<div className="admin-detail-row admin-detail-row--full">
+								<span className="admin-detail-label"><i className="pi pi-users" />&nbsp;AD Groups</span>
+								<div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+									{detailData.Groups.map(g => <span key={g} className="admin-dept-badge">{g}</span>)}
+								</div>
+							</div>
+						)}
+					</div>
+				)}
+				<div className="admin-dialog-footer">
+					<Button label="Edit User" icon="pi pi-pencil" className="admin-save-btn" onClick={() => { hideAll(); openEditUser(selectedUser); }} />
+					<Button label="Close" icon="pi pi-times" className="p-button-text p-button-secondary" onClick={hideAll} />
+				</div>
+			</Dialog>
+
+			{/* ── Force Password Change Dialog ───────────────────────── */}
+			<Dialog
+				visible={forceChangeDialog}
+				style={{ width: "420px" }}
+				header={<div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.18)", fontSize: "1.2rem" }}><i className="pi pi-refresh" style={{ color: "#fff" }} /></span><span style={{ color: "#fff", fontWeight: 900 }}>Force Password Change</span></div>}
+				modal className="admin-dialog" onHide={hideAll}
+			>
+				<div className="admin-confirm-box" style={{ background: "rgba(234,88,12,0.07)", borderColor: "rgba(234,88,12,0.25)" }}>
+					<i className="pi pi-exclamation-triangle" style={{ color: "#ea580c" }} />
+					<div>
+						<strong>{selectedUser?.Name}</strong>
+						<p>The user will be required to change their password the next time they log in. Their current session will not be interrupted.</p>
+					</div>
+				</div>
+				<div className="admin-dialog-footer">
+					<Button label="Cancel" icon="pi pi-times" className="p-button-text p-button-secondary" onClick={hideAll} disabled={submitting} />
+					<Button label="Force Change" icon="pi pi-refresh" className="admin-save-btn" style={{ background: "linear-gradient(135deg,#ea580c,#c2410c)" }} onClick={handleForcePasswordChange} loading={submitting} />
+				</div>
+			</Dialog>
+
+			{/* ── Send Reset OTP Dialog ──────────────────────────────── */}
+			<Dialog
+				visible={sendOtpDialog}
+				style={{ width: "420px" }}
+				header={<div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.18)", fontSize: "1.2rem" }}><i className="pi pi-envelope" style={{ color: "#fff" }} /></span><span style={{ color: "#fff", fontWeight: 900 }}>Send Password Reset OTP</span></div>}
+				modal className="admin-dialog" onHide={hideAll}
+			>
+				{!otpResult ? (
+					<>
+						<div className="admin-confirm-box" style={{ background: "rgba(16,185,129,0.07)", borderColor: "rgba(16,185,129,0.25)" }}>
+							<i className="pi pi-send" style={{ color: "#059669" }} />
+							<div>
+								<strong>{selectedUser?.Name} ({selectedUser?.Emp_id})</strong>
+								<p>An OTP email will be sent to the user's registered address so they can reset their own password.</p>
+							</div>
+						</div>
+						<div className="admin-dialog-footer">
+							<Button label="Cancel" icon="pi pi-times" className="p-button-text p-button-secondary" onClick={hideAll} disabled={submitting} />
+							<Button label="Send OTP Email" icon="pi pi-send" className="admin-save-btn" style={{ background: "linear-gradient(135deg,#059669,#047857)" }} onClick={handleSendResetOtp} loading={submitting} />
+						</div>
+					</>
+				) : (
+					<>
+						<div className="admin-confirm-box" style={{ background: "rgba(16,185,129,0.09)", borderColor: "rgba(16,185,129,0.28)" }}>
+							<i className="pi pi-check-circle" style={{ color: "#059669", fontSize: "1.8rem" }} />
+							<div>
+								<strong>OTP Sent Successfully</strong>
+								<p>Email sent to: <b>{otpResult.masked_email}</b></p>
+								{otpResult.is_fallback && <p style={{ color: "#d97706", marginTop: 4 }}>⚠ No email on file — sent to IT helpdesk instead.</p>}
+								<p style={{ marginTop: 4 }}>Expires in: {Math.floor(otpResult.expires_in / 60)} minutes</p>
+							</div>
+						</div>
+						<div className="admin-dialog-footer">
+							<Button label="Done" icon="pi pi-check" className="admin-save-btn" onClick={hideAll} />
+						</div>
+					</>
+				)}
 			</Dialog>
 		</main>
 	);

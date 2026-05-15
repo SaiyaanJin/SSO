@@ -1841,5 +1841,478 @@ def admin_unlock_user(username):
             except: pass
 
 
+# ---------------------------------------------------------------------------
+#  Admin — Force Password Change at Next Login
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/users/<username>/force-password-change", methods=["POST"])
+@require_it_admin
+def admin_force_password_change(username):
+    """Set pwdLastSet=0 so the user must change their password at next logon."""
+    import pythoncom
+    pythoncom.CoInitialize()
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        rec = search_user(conn, username)
+        conn.unbind_s()
+        if not rec:
+            return json_error("User not found", 404)
+        dn = rec[0]
+
+        dc = settings.ldap_uri.replace("ldap://", "").replace("ldaps://", "").strip()
+        import win32com.client
+        dso = win32com.client.GetObject("LDAP:")
+        obj = dso.OpenDSObject(
+            f"LDAP://{dc}/{dn}",
+            settings.ldap_admin_user,
+            settings.ldap_admin_password,
+            1,
+        )
+        obj.Put("pwdLastSet", 0)
+        obj.SetInfo()
+
+        target_name, _, target_dept = _fetch_target_info(username)
+        _send_audit_email(
+            "Reset Password",
+            _performer_from_request(),
+            target_name, username, target_dept,
+            [("Action", "Force password change flagged — user must change at next login", "")],
+        )
+        logger.info("Force-password-change set for %s by admin", username)
+        return jsonify({"status": "success", "message": "User will be required to change password at next login"})
+    except Exception as exc:
+        logger.exception("force-password-change failed for %s", username)
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+#  Admin — Send Password Reset OTP to User
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/users/<username>/send-reset-otp", methods=["POST"])
+@require_it_admin
+def admin_send_reset_otp(username):
+    """Admin-triggered: look up user's email and send a password reset OTP on their behalf."""
+    _cleanup_expired_otps()
+
+    dn, email, display_name = _lookup_user_email(username)
+    if not dn:
+        return json_error("User not found in directory", 404)
+
+    FALLBACK_EMAIL = "erldcit@grid-india.in"
+    is_fallback = False
+    if not email:
+        email = FALLBACK_EMAIL
+        is_fallback = True
+
+    otp_code = _generate_otp()
+    otp_store[username] = {
+        "otp": otp_code, "email": email, "dn": dn,
+        "display_name": display_name,
+        "expires_at": time.time() + settings.otp_expiry_seconds,
+        "created_at": time.time(), "attempts": 0,
+        "is_fallback": is_fallback,
+    }
+
+    if not _send_otp_email(email, otp_code, username):
+        del otp_store[username]
+        return json_error("Failed to send OTP email. Try again later.", 503)
+
+    target_name, _, target_dept = _fetch_target_info(username)
+    _send_audit_email(
+        "Reset Password",
+        _performer_from_request(),
+        target_name, username, target_dept,
+        [
+            ("Action",    "Admin-initiated OTP password reset email sent"),
+            ("Sent To",   _mask_email(email)),
+            ("Expires In", f"{settings.otp_expiry_seconds // 60} minutes"),
+        ],
+    )
+    logger.info("Admin sent reset OTP for %s to %s", username, _mask_email(email))
+    return jsonify({
+        "status": "otp_sent",
+        "masked_email": _mask_email(email),
+        "is_fallback": is_fallback,
+        "expires_in": settings.otp_expiry_seconds,
+    })
+
+
+# ---------------------------------------------------------------------------
+#  Admin — Extended User Detail
+# ---------------------------------------------------------------------------
+
+def _filetime_to_iso(raw):
+    """Convert a Windows FILETIME string to an ISO-8601 datetime string (IST), or ''."""
+    if not raw or raw in ("0", "9223372036854775807"):
+        return ""
+    try:
+        ft = int(raw)
+        if ft <= 0:
+            return ""
+        EPOCH_DIFF = 116444736000000000
+        ts = (ft - EPOCH_DIFF) / 10_000_000
+        utc_dt = dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc)
+        ist_dt = utc_dt.astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+        return ist_dt.strftime("%d %b %Y, %I:%M %p IST")
+    except (ValueError, OverflowError, OSError):
+        return ""
+
+
+def _ad_datetime_to_iso(raw):
+    """Convert an AD generalizedTime string (YYYYMMDDHHmmss.0Z) to human-readable IST."""
+    if not raw:
+        return ""
+    try:
+        # strip trailing .0Z / Z
+        clean = raw.rstrip("Z").split(".")[0]
+        utc_dt = dt.datetime.strptime(clean, "%Y%m%d%H%M%S").replace(tzinfo=dt.timezone.utc)
+        ist_dt = utc_dt.astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+        return ist_dt.strftime("%d %b %Y, %I:%M %p IST")
+    except ValueError:
+        return raw
+
+
+@app.route("/admin/users/<username>/detail", methods=["GET"])
+@require_it_admin
+def admin_user_detail(username):
+    """Return extended AD attributes for a single user."""
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+        safe = escape_filter_chars(username.strip())
+        fltr = f"(userPrincipalName={safe}@{settings.ldap_upn_domain})"
+        result = conn.search_s(
+            settings.ldap_base_dn,
+            ldap.SCOPE_SUBTREE,
+            fltr,
+            [
+                "cn", "sAMAccountName", "mail", "telephoneNumber",
+                "distinguishedName", "userAccountControl",
+                "lockoutTime", "pwdLastSet",
+                "msDS-UserPasswordExpiryTimeComputed",
+                "lastLogonTimestamp", "whenCreated", "memberOf",
+                "description", "title", "department",
+                "badPwdCount", "badPasswordTime",
+            ],
+        )
+        rec = next((item for item in result if item and item[0]), None)
+        if not rec:
+            return json_error("User not found", 404)
+
+        dn, attrs = rec
+
+        # Groups (memberOf) — show only CN part
+        raw_groups = attrs.get("memberOf") or []
+        groups = []
+        for g in raw_groups:
+            gdn = decode_bytes(g) if isinstance(g, bytes) else str(g)
+            cn_part = gdn.split(",")[0]
+            groups.append(cn_part[3:] if cn_part.upper().startswith("CN=") else gdn)
+
+        uac = 512
+        try:
+            uac = int(first_attr(attrs, "userAccountControl", "512"))
+        except ValueError:
+            pass
+
+        detail = {
+            "Name":          first_attr(attrs, "cn"),
+            "Emp_id":        first_attr(attrs, "sAMAccountName"),
+            "Mail":          first_attr(attrs, "mail"),
+            "Mobile":        first_attr(attrs, "telephoneNumber"),
+            "Department":    department_name_from_dn(dn),
+            "DN":            dn,
+            "Title":         first_attr(attrs, "title"),
+            "Description":   first_attr(attrs, "description"),
+            "Status":        "Disabled" if (uac & 2) else "Active",
+            "Locked":        bool(int(first_attr(attrs, "lockoutTime", "0") or "0") > 0),
+            "NeverExpires":  bool(uac & 0x10000),
+            "MustChangePwd": first_attr(attrs, "pwdLastSet", "1") == "0",
+            "BadPwdCount":   first_attr(attrs, "badPwdCount", "0"),
+            "LastLogon":     _filetime_to_iso(first_attr(attrs, "lastLogonTimestamp")),
+            "WhenCreated":   _ad_datetime_to_iso(first_attr(attrs, "whenCreated")),
+            "PwdLastSet":    _filetime_to_iso(first_attr(attrs, "pwdLastSet")),
+            "BadPwdTime":    _filetime_to_iso(first_attr(attrs, "badPasswordTime")),
+            "Groups":        groups,
+        }
+
+        # Compute expiry days using existing helper (reuse get_password_expiry_days)
+        days, _ = get_password_expiry_days(username)
+        detail["PwdExpiry"] = days
+
+        return jsonify(detail)
+    except Exception as exc:
+        logger.exception("admin_user_detail failed for %s", username)
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+
+# ---------------------------------------------------------------------------
+#  Admin — Dashboard Statistics
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/stats", methods=["GET"])
+@require_it_admin
+def admin_stats():
+    """Return aggregate statistics for the Admin Console dashboard."""
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+
+        # Domain maxPwdAge (for expiry calculations)
+        domain_result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_BASE, "(objectClass=*)", ["maxPwdAge"]
+        )
+        max_pwd_age_seconds = None
+        if domain_result and domain_result[0][0]:
+            raw = first_attr(domain_result[0][1], "maxPwdAge", "0")
+            try:
+                val = int(raw)
+                if val != 0:
+                    max_pwd_age_seconds = abs(val) / 10_000_000
+            except (ValueError, TypeError):
+                pass
+
+        _EPOCH_DIFF = 116444736000000000
+        now_ts = now_utc().timestamp()
+
+        result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_SUBTREE, "(objectClass=user)",
+            ["sAMAccountName", "distinguishedName", "userAccountControl",
+             "lockoutTime", "pwdLastSet", "msDS-UserPasswordExpiryTimeComputed"],
+        )
+
+        total = active = disabled = locked = 0
+        expired = expiring_7 = expiring_30 = never_expires = 0
+        dept_counts = {}
+
+        for dn, attrs in result:
+            if not dn:
+                continue
+            total += 1
+            uac = 512
+            try:
+                uac = int(first_attr(attrs, "userAccountControl", "512"))
+            except (ValueError, TypeError):
+                pass
+
+            is_disabled = bool(uac & 2)
+            is_locked = False
+            try:
+                is_locked = int(first_attr(attrs, "lockoutTime", "0")) > 0
+            except (ValueError, TypeError):
+                pass
+
+            if is_disabled:
+                disabled += 1
+            else:
+                active += 1
+            if is_locked:
+                locked += 1
+
+            # Department tally
+            dept = department_name_from_dn(dn)
+            dept_counts[dept] = dept_counts.get(dept, 0) + 1
+
+            # Password expiry
+            never_flag = bool(uac & 0x10000)
+            if never_flag:
+                never_expires += 1
+                continue
+
+            pwd_days = None
+            computed_raw = first_attr(attrs, "msDS-UserPasswordExpiryTimeComputed", "")
+            if computed_raw and computed_raw not in ("0", "9223372036854775807"):
+                try:
+                    ft = int(computed_raw)
+                    if ft != 9223372036854775807:
+                        expiry_ts = (ft - _EPOCH_DIFF) / 10_000_000
+                        pwd_days = max(int((expiry_ts - now_ts) // 86400), 0)
+                except (ValueError, OverflowError, OSError):
+                    pass
+
+            if pwd_days is None and max_pwd_age_seconds:
+                pwd_last_raw = first_attr(attrs, "pwdLastSet", "0")
+                try:
+                    pwd_last = int(pwd_last_raw)
+                    if pwd_last == 0:
+                        pwd_days = 0
+                    else:
+                        last_ts = (pwd_last - _EPOCH_DIFF) / 10_000_000
+                        expiry_ts = last_ts + max_pwd_age_seconds
+                        pwd_days = max(int((expiry_ts - now_ts) // 86400), 0)
+                except (ValueError, OverflowError, OSError):
+                    pass
+
+            if pwd_days is not None:
+                if pwd_days == 0:
+                    expired += 1
+                elif pwd_days <= 7:
+                    expiring_7 += 1
+                elif pwd_days <= 30:
+                    expiring_30 += 1
+
+        return jsonify({
+            "total":        total,
+            "active":       active,
+            "disabled":     disabled,
+            "locked":       locked,
+            "expired":      expired,
+            "expiring_7":   expiring_7,
+            "expiring_30":  expiring_30,
+            "never_expires": never_expires,
+            "by_department": sorted(
+                [{"dept": k, "count": v} for k, v in dept_counts.items()],
+                key=lambda x: -x["count"],
+            ),
+        })
+    except Exception as exc:
+        logger.exception("admin_stats failed")
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+
+# ---------------------------------------------------------------------------
+#  Admin — CSV Export
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/export", methods=["GET"])
+@require_it_admin
+def admin_export_csv():
+    """Stream all users as a UTF-8 CSV file for download."""
+    import csv, io
+
+    conn = None
+    try:
+        conn = ldap_connection(settings.ldap_admin_user, settings.ldap_admin_password)
+
+        # Domain maxPwdAge
+        domain_result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_BASE, "(objectClass=*)", ["maxPwdAge"]
+        )
+        max_pwd_age_seconds = None
+        if domain_result and domain_result[0][0]:
+            raw = first_attr(domain_result[0][1], "maxPwdAge", "0")
+            try:
+                val = int(raw)
+                if val != 0:
+                    max_pwd_age_seconds = abs(val) / 10_000_000
+            except (ValueError, TypeError):
+                pass
+
+        _EPOCH_DIFF = 116444736000000000
+        now_ts = now_utc().timestamp()
+
+        result = conn.search_s(
+            settings.ldap_base_dn, ldap.SCOPE_SUBTREE, "(objectClass=user)",
+            ["cn", "sAMAccountName", "mail", "telephoneNumber",
+             "distinguishedName", "userAccountControl",
+             "lockoutTime", "pwdLastSet", "msDS-UserPasswordExpiryTimeComputed",
+             "lastLogonTimestamp", "whenCreated"],
+        )
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Employee Name", "Employee ID", "Department", "Email",
+            "Phone", "Status", "Locked", "Pwd Expiry (Days)",
+            "Last Logon", "Account Created",
+        ])
+
+        for dn, attrs in result:
+            if not dn:
+                continue
+            uac = 512
+            try:
+                uac = int(first_attr(attrs, "userAccountControl", "512"))
+            except (ValueError, TypeError):
+                pass
+            disabled = bool(uac & 2)
+            locked = False
+            try:
+                locked = int(first_attr(attrs, "lockoutTime", "0")) > 0
+            except (ValueError, TypeError):
+                pass
+
+            # Expiry
+            never_flag = bool(uac & 0x10000)
+            pwd_days = "Never Expires" if never_flag else ""
+            if not never_flag:
+                computed_raw = first_attr(attrs, "msDS-UserPasswordExpiryTimeComputed", "")
+                computed_ok = False
+                if computed_raw and computed_raw not in ("0", "9223372036854775807"):
+                    try:
+                        ft = int(computed_raw)
+                        if ft != 9223372036854775807:
+                            expiry_ts = (ft - _EPOCH_DIFF) / 10_000_000
+                            pwd_days = str(max(int((expiry_ts - now_ts) // 86400), 0))
+                            computed_ok = True
+                    except (ValueError, OverflowError, OSError):
+                        pass
+                if not computed_ok and max_pwd_age_seconds:
+                    pwd_last_raw = first_attr(attrs, "pwdLastSet", "0")
+                    try:
+                        pwd_last = int(pwd_last_raw)
+                        if pwd_last == 0:
+                            pwd_days = "Expired"
+                        else:
+                            last_ts = (pwd_last - _EPOCH_DIFF) / 10_000_000
+                            expiry_ts = last_ts + max_pwd_age_seconds
+                            pwd_days = str(max(int((expiry_ts - now_ts) // 86400), 0))
+                    except (ValueError, OverflowError, OSError):
+                        pass
+
+            # Last logon
+            last_logon = _filetime_to_iso(first_attr(attrs, "lastLogonTimestamp"))
+            # whenCreated
+            created = _ad_datetime_to_iso(first_attr(attrs, "whenCreated"))
+
+            writer.writerow([
+                first_attr(attrs, "cn"),
+                first_attr(attrs, "sAMAccountName"),
+                department_name_from_dn(dn),
+                first_attr(attrs, "mail"),
+                first_attr(attrs, "telephoneNumber"),
+                "Disabled" if disabled else "Active",
+                "Yes" if locked else "No",
+                pwd_days,
+                last_logon,
+                created,
+            ])
+
+        ist_now = now_utc().astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+        filename = f"ERLDC_AD_Users_{ist_now.strftime('%Y%m%d_%H%M')}.csv"
+        csv_bytes = output.getvalue().encode("utf-8-sig")  # utf-8-sig for Excel compatibility
+
+        return Response(
+            csv_bytes,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(csv_bytes)),
+            },
+        )
+    except Exception as exc:
+        logger.exception("admin_export_csv failed")
+        return json_error(f"Error: {exc}", 500)
+    finally:
+        if conn:
+            try: conn.unbind_s()
+            except: pass
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=settings.debug)
+
