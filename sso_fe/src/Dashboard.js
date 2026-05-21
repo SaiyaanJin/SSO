@@ -118,7 +118,7 @@ const applications = [
 	},
 	{
 		imageName: "CRMS.jpg",
-		linkTo: "http://crms.erldc.in/",
+		linkTo: "https://crms.erldc.in/Codebook/accounts/login/",
 		title: "CRMS-ERLDC",
 		desc: "Control Room Management System",
 		category: "Operations",
@@ -248,6 +248,22 @@ export default function Dashboard() {
 	const [userName, setUserName] = useState("");
 	const [now, setNow] = useState(() => new Date());
 
+	// Dynamic mapping of applications to inject the actual token for CRMS-ERLDC
+	const token = localStorage.getItem("token");
+	const mappedApplications = useMemo(() => {
+		return applications.map((app) => {
+			if (app.title === "CRMS-ERLDC") {
+				return {
+					...app,
+					linkTo: token
+						? `https://crms.erldc.in/Codebook/accounts/login/?token=${encodeURIComponent(token)}`
+						: app.linkTo,
+				};
+			}
+			return app;
+		});
+	}, [token]);
+
 	// Password expiry for the logged-in user
 	const [pwdExpiry, setPwdExpiry] = useState(null); // { daysRemaining, neverExpires }
 	const [pwdBannerDismissed, setPwdBannerDismissed] = useState(false);
@@ -343,7 +359,7 @@ export default function Dashboard() {
 			// Fetch password expiry for this user (non-blocking)
 			axios.post(`${SSO_API}/password-expiry`, {}, { headers: { Token: token } })
 				.then(res => setPwdExpiry(res.data))
-				.catch(() => {}); // silently ignore
+				.catch(() => { }); // silently ignore
 		} catch (error) {
 			localStorage.removeItem("token");
 			navigate("/");
@@ -379,14 +395,14 @@ export default function Dashboard() {
 	}, [isCheckingSession, now, onClickLogout, sessionExpiresAt]);
 
 	const categories = useMemo(
-		() => ["All", ...Array.from(new Set(applications.map((app) => app.category)))],
-		[]
+		() => ["All", ...Array.from(new Set(mappedApplications.map((app) => app.category)))],
+		[mappedApplications]
 	);
 
 	const filteredApps = useMemo(() => {
 		const normalizedQuery = query.trim().toLowerCase();
 
-		return applications.filter((app) => {
+		return mappedApplications.filter((app) => {
 			const categoryMatch =
 				activeCategory === "All" || app.category === activeCategory;
 			const queryMatch =
@@ -398,7 +414,7 @@ export default function Dashboard() {
 
 			return categoryMatch && queryMatch;
 		});
-	}, [activeCategory, query]);
+	}, [activeCategory, query, mappedApplications]);
 
 	const todayDate = useMemo(
 		() =>
@@ -464,25 +480,25 @@ export default function Dashboard() {
 				</div>
 				<div className="dashboard-nav__actions">
 					{userDepartment === "Information Technology (IT)" && (
-					<>
-						<button
-							type="button"
-							className="nav-dir-btn nav-admin-btn"
-							onClick={() => navigate("/admin")}
-						>
-							<i className="pi pi-shield" aria-hidden="true" />
-							<span>Admin Console</span>
-						</button>
-						<button
-							type="button"
-							className="nav-dir-btn"
-							onClick={fetchEmpData}
-						>
-							<i className="pi pi-address-book" aria-hidden="true" />
-							<span>Employee Directory</span>
-						</button>
-					</>
-				)}
+						<>
+							<button
+								type="button"
+								className="nav-dir-btn nav-admin-btn"
+								onClick={() => navigate("/admin")}
+							>
+								<i className="pi pi-shield" aria-hidden="true" />
+								<span>Admin Console</span>
+							</button>
+							<button
+								type="button"
+								className="nav-dir-btn"
+								onClick={fetchEmpData}
+							>
+								<i className="pi pi-address-book" aria-hidden="true" />
+								<span>Employee Directory</span>
+							</button>
+						</>
+					)}
 					<button
 						type="button"
 						className="nav-dir-btn nav-changepwd-btn"
@@ -541,7 +557,7 @@ export default function Dashboard() {
 
 				<div className="dashboard-overview">
 					<div>
-						<span>{applications.length}</span>
+						<span>{mappedApplications.length}</span>
 						<p>Applications</p>
 					</div>
 					<div>
@@ -564,35 +580,35 @@ export default function Dashboard() {
 			{/* ── Password Expiry Banner ──────────────────────────────── */}
 			{pwdExpiry && !pwdExpiry.never_expires && !pwdBannerDismissed &&
 				pwdExpiry.days_remaining !== null && pwdExpiry.days_remaining <= 7 && (
-				<div className={`dashboard-pwd-banner ${pwdExpiry.days_remaining <= 3 ? "dashboard-pwd-banner--critical" : ""}`} role="alert">
-					<div className="dashboard-pwd-banner__icon">
-						<i className={`pi ${pwdExpiry.days_remaining === 0 ? "pi-times-circle" : "pi-exclamation-triangle"}`} />
+					<div className={`dashboard-pwd-banner ${pwdExpiry.days_remaining <= 3 ? "dashboard-pwd-banner--critical" : ""}`} role="alert">
+						<div className="dashboard-pwd-banner__icon">
+							<i className={`pi ${pwdExpiry.days_remaining === 0 ? "pi-times-circle" : "pi-exclamation-triangle"}`} />
+						</div>
+						<div className="dashboard-pwd-banner__body">
+							<strong>
+								{pwdExpiry.days_remaining === 0
+									? "Your password has expired!"
+									: `Your password expires in ${pwdExpiry.days_remaining} day${pwdExpiry.days_remaining === 1 ? "" : "s"}.`}
+							</strong>
+							{" "}Reset it now to avoid being locked out of all ERLDC systems.
+						</div>
+						<button
+							type="button"
+							className="dashboard-pwd-banner__btn"
+							onClick={() => navigate("/reset-password")}
+						>
+							<i className="pi pi-key" /> Reset Password
+						</button>
+						<button
+							type="button"
+							className="dashboard-pwd-banner__dismiss"
+							aria-label="Dismiss"
+							onClick={() => setPwdBannerDismissed(true)}
+						>
+							<i className="pi pi-times" />
+						</button>
 					</div>
-					<div className="dashboard-pwd-banner__body">
-						<strong>
-							{pwdExpiry.days_remaining === 0
-								? "Your password has expired!"
-								: `Your password expires in ${pwdExpiry.days_remaining} day${pwdExpiry.days_remaining === 1 ? "" : "s"}.`}
-						</strong>
-						{" "}Reset it now to avoid being locked out of all ERLDC systems.
-					</div>
-					<button
-						type="button"
-						className="dashboard-pwd-banner__btn"
-						onClick={() => navigate("/reset-password")}
-					>
-						<i className="pi pi-key" /> Reset Password
-					</button>
-					<button
-						type="button"
-						className="dashboard-pwd-banner__dismiss"
-						aria-label="Dismiss"
-						onClick={() => setPwdBannerDismissed(true)}
-					>
-						<i className="pi pi-times" />
-					</button>
-				</div>
-			)}
+				)}
 
 			{/* ── Session Expiry Warning Modal ─────────────────────────── */}
 			<Dialog

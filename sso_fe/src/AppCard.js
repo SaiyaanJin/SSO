@@ -16,7 +16,8 @@ export default function AppCard({
 
 	const openApplication = () => {
 		const separator = linkTo.includes("?") ? "&" : "?";
-		const tokenQuery = token ? `${separator}token=${encodeURIComponent(token)}` : "";
+		const hasToken = linkTo.includes("token=");
+		const tokenQuery = (token && !hasToken) ? `${separator}token=${encodeURIComponent(token)}` : "";
 
 		window.open(`${linkTo}${tokenQuery}`, "_blank", "noopener,noreferrer");
 	};
