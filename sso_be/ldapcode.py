@@ -289,7 +289,7 @@ def format_employee(dn, attrs):
     }
 
 
-def make_login_payload(login, username, department=None, person_name=None, reason=None):
+def make_login_payload(login, username, department=None, person_name=None, email=None, reason=None):
     issued_at = now_utc()
     expires_at = issued_at + dt.timedelta(hours=settings.session_hours)
     payload = {
@@ -304,6 +304,8 @@ def make_login_payload(login, username, department=None, person_name=None, reaso
         payload["Department"] = department
     if person_name is not None:
         payload["Person_Name"] = person_name
+    if email is not None:
+        payload["Email"] = email
     if reason:
         payload["Reason"] = reason
     return payload
@@ -449,7 +451,8 @@ def token():
         dn, attrs = user_record
         department = department_name_from_dn(dn)
         person_name = first_attr(attrs, "cn") or dn.split(",", 1)[0][3:]
-        payload = make_login_payload(True, username, department, person_name)
+        email = format_mail(attrs)
+        payload = make_login_payload(True, username, department, person_name, email)
         logged_out_users.discard(username)
         logger.info("Successful login for %s", username)
         return jsonify({"Token": encode_token(payload, settings.login_token_secret)})
@@ -493,6 +496,7 @@ def verify():
             "User": user,
             "Department": decoded_jwt.get("Department", ""),
             "Person_Name": decoded_jwt.get("Person_Name", ""),
+            "Email": decoded_jwt.get("Email", ""),
             "iat": int(time.time()),
             "jti": uuid.uuid4().hex,
         }
@@ -535,6 +539,7 @@ def me():
             "User": user.get("User"),
             "Department": user.get("Department", ""),
             "Person_Name": user.get("Person_Name", ""),
+            "Email": user.get("Email", ""),
             "Token_Time": user.get("Token_Time"),
         }
     )
