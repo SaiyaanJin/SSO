@@ -3,8 +3,8 @@ import ldap
 
 # AD details
 dc = "10.3.110.120"
-admin_user = r"erldc\administrator"
-admin_pass = "EradRT$A09"
+admin_user = r"erldc\ssoadmin"
+admin_pass = "Erldc#2026$"
 
 try:
     conn = ldap.initialize(f"ldap://{dc}")

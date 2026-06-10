@@ -8,7 +8,7 @@ except Exception as e:
     print('StartTLS failed')
 
 try:
-    conn.simple_bind_s(r'erldc\administrator', 'EradRT$A09')
+    conn.simple_bind_s(r'erldc\ssoadmin', 'Erldc#2026$')
     res = conn.search_s('dc=erldc,dc=net', ldap.SCOPE_SUBTREE, '(sAMAccountName=00162)')
     print('Search worked after failed StartTLS!')
 except Exception as e:
