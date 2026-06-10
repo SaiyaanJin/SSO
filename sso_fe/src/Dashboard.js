@@ -247,6 +247,8 @@ export default function Dashboard() {
 	const [userDepartment, setUserDepartment] = useState(null);
 	const [userName, setUserName] = useState("");
 	const [now, setNow] = useState(() => new Date());
+	const [currentUserId, setCurrentUserId] = useState("");
+	const [activeUsers, setActiveUsers] = useState([]);
 
 	// Dynamic mapping of applications to inject the actual token for CRMS-ERLDC
 	const token = localStorage.getItem("token");
@@ -280,6 +282,13 @@ export default function Dashboard() {
 	});
 	const [globalFilterValue, setGlobalFilterValue] = useState("");
 
+	const empTableData = useMemo(() => {
+		return empData.map((emp) => ({
+			...emp,
+			ssoStatus: activeUsers.includes(emp.Emp_id) ? "Logged In" : "Offline",
+		}));
+	}, [empData, activeUsers]);
+
 	const fetchEmpData = () => {
 		setShowEmpDirectory(true);
 		axios
@@ -292,6 +301,26 @@ export default function Dashboard() {
 			.catch((err) => {
 				console.error("Failed to fetch emp_data", err);
 			});
+
+		// Fetch currently logged-in SSO users if currentUserId is 00162
+		const token = localStorage.getItem("token");
+		try {
+			const decoded = token ? jwt_decode(token) : {};
+			if (decoded.User === "00162") {
+				axios
+					.get(`${SSO_API}/active-users`, {
+						headers: { Token: token },
+					})
+					.then((res) => {
+						setActiveUsers(res.data || []);
+					})
+					.catch((err) => {
+						console.error("Failed to fetch active users", err);
+					});
+			}
+		} catch (e) {
+			console.error("Error checking user ID or fetching active users", e);
+		}
 	};
 
 	const onGlobalFilterChange = (e) => {
@@ -353,6 +382,7 @@ export default function Dashboard() {
 
 			setUserDepartment(decoded.Department);
 			setUserName(typeof decoded.Name === "string" ? decoded.Name : "");
+			setCurrentUserId(decoded.User || "");
 			setSessionExpiresAt(expiresAt);
 			setIsCheckingSession(false);
 
@@ -741,7 +771,7 @@ export default function Dashboard() {
 				>
 					<DataTable
 						filters={filters}
-						globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile"]}
+						globalFilterFields={["Name", "Emp_id", "Department", "Mail", "Mobile", "ssoStatus"]}
 						header={
 							<div className="emp-dir-table-toolbar">
 								<span className="emp-dir-search-wrap">
@@ -766,7 +796,7 @@ export default function Dashboard() {
 						rowsPerPageOptions={[10, 25, 50]}
 						scrollable
 						scrollHeight="flex"
-						value={empData}
+						value={empTableData}
 						stripedRows
 						showGridlines
 						className="emp-dir-table"
@@ -830,6 +860,23 @@ export default function Dashboard() {
 								</span>
 							)}
 						/>
+						{currentUserId === "00162" && (
+							<Column
+								field="ssoStatus"
+								header="SSO Status"
+								style={{ width: '12%', textAlign: 'center' }}
+								sortable
+								body={(rowData) => {
+									const isOnline = rowData.ssoStatus === "Logged In";
+									return (
+										<span className={`emp-dir-status-badge emp-dir-status-badge--${isOnline ? 'online' : 'offline'}`}>
+											<span className="emp-dir-status-badge__dot" />
+											{rowData.ssoStatus}
+										</span>
+									);
+								}}
+							/>
+						)}
 					</DataTable>
 				</Dialog>
 			</section>

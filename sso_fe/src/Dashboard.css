@@ -1560,3 +1560,56 @@ html[data-theme="dark"] .dashboard-pwd-banner__dismiss { color: #fde68a; }
 .session-warn-btn--logout:hover {
 	background: rgba(220, 38, 38, 0.18);
 }
+
+/* SSO Admin active session status badges */
+.emp-dir-status-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.emp-dir-status-badge--online {
+	background: rgba(34, 197, 94, 0.12);
+	color: #16a34a;
+	border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.emp-dir-status-badge--offline {
+	background: rgba(148, 163, 184, 0.1);
+	color: #64748b;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+html[data-theme="dark"] .emp-dir-status-badge--online {
+	background: rgba(52, 211, 153, 0.1);
+	color: #34d399;
+	border-color: rgba(52, 211, 153, 0.2);
+}
+
+html[data-theme="dark"] .emp-dir-status-badge--offline {
+	background: rgba(71, 85, 105, 0.2);
+	color: #94a3b8;
+	border-color: rgba(71, 85, 105, 0.3);
+}
+
+.emp-dir-status-badge__dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+.emp-dir-status-badge--online .emp-dir-status-badge__dot {
+	background-color: #22c55e;
+	box-shadow: 0 0 6px #22c55e;
+}
+
+.emp-dir-status-badge--offline .emp-dir-status-badge__dot {
+	background-color: #64748b;
+}

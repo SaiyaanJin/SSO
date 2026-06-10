@@ -54,6 +54,10 @@ CORS(app, resources={r"/*": {"origins": settings.cors_origins}})
 
 logged_out_users = set()
 
+# Session tracking for user monitoring
+active_sessions_lock = threading.Lock()
+active_sessions = {}  # { username: exp }
+
 # In-memory OTP store: { username: { otp, email, expires_at, created_at, attempts } }
 otp_store = {}
 
@@ -454,6 +458,8 @@ def token():
         email = format_mail(attrs)
         payload = make_login_payload(True, username, department, person_name, email)
         logged_out_users.discard(username)
+        with active_sessions_lock:
+            active_sessions[username] = payload["exp"]
         logger.info("Successful login for %s", username)
         return jsonify({"Token": encode_token(payload, settings.login_token_secret)})
     except ldap.INVALID_CREDENTIALS:
@@ -500,6 +506,9 @@ def verify():
             "iat": int(time.time()),
             "jti": uuid.uuid4().hex,
         }
+        if user:
+            with active_sessions_lock:
+                active_sessions[user] = decoded_jwt.get("exp", time.time() + settings.session_hours * 3600)
     else:
         final_payload = {"Login": False, "Reason": "Login Failed"}
 
@@ -526,6 +535,8 @@ def logout():
     user = logout_data.get("User")
     if user:
         logged_out_users.add(user)
+        with active_sessions_lock:
+            active_sessions.pop(user, None)
         logger.info("Logged out %s", user)
     return jsonify({"status": "logged_out"})
 
@@ -543,6 +554,24 @@ def me():
             "Token_Time": user.get("Token_Time"),
         }
     )
+
+
+def get_active_users():
+    now = time.time()
+    with active_sessions_lock:
+        expired = [u for u, exp in active_sessions.items() if exp < now]
+        for u in expired:
+            active_sessions.pop(u, None)
+        return list(active_sessions.keys())
+
+
+@app.route("/active-users", methods=["GET"])
+@require_login_token
+def active_users():
+    current_user = request.sso_user.get("User")
+    if current_user != "00162":
+        return json_error("Unauthorized", 403)
+    return jsonify(get_active_users())
 
 
 def _validate_password_strength(password):
