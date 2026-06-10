@@ -2482,6 +2482,72 @@ def admin_export_csv():
             except: pass
 
 
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspace_data")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+
+def _read_json_file(filename):
+    import json
+    filepath = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(filepath):
+        return []
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error("Error reading %s: %s", filename, e)
+        return []
+
+
+def _write_json_file(filename, data):
+    import json
+    filepath = os.path.join(DATA_DIR, filename)
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Error writing %s: %s", filename, e)
+
+
+@app.route("/workspace-data", methods=["GET"])
+@require_login_token
+def get_workspace_data():
+    return jsonify({
+        "custom_apps": _read_json_file("sso_custom_apps.json"),
+        "deleted_static_apps": _read_json_file("sso_deleted_static_apps.json"),
+        "modified_static_apps": _read_json_file("sso_modified_static_apps.json"),
+        "custom_quick_links": _read_json_file("sso_custom_quick_links.json")
+    })
+
+
+@app.route("/workspace-data", methods=["POST"])
+@require_login_token
+def update_workspace_data():
+    user_id = request.sso_user.get("User")
+    user_dept = request.sso_user.get("Department")
+
+    if user_dept != "Information Technology (IT)" and user_id != "00162":
+        return json_error("Unauthorized", 403)
+
+    data = request.get_json()
+    if not data:
+        return json_error("Invalid request body")
+
+    if "custom_apps" in data:
+        _write_json_file("sso_custom_apps.json", data["custom_apps"])
+    if "custom_quick_links" in data:
+        _write_json_file("sso_custom_quick_links.json", data["custom_quick_links"])
+
+    if user_id == "00162":
+        if "deleted_static_apps" in data:
+            _write_json_file("sso_deleted_static_apps.json", data["deleted_static_apps"])
+        if "modified_static_apps" in data:
+            _write_json_file("sso_modified_static_apps.json", data["modified_static_apps"])
+
+    return jsonify({"status": "success"})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=settings.debug)
 

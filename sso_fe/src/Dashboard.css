@@ -1613,3 +1613,459 @@ html[data-theme="dark"] .emp-dir-status-badge--offline {
 .emp-dir-status-badge--offline .emp-dir-status-badge__dot {
 	background-color: #64748b;
 }
+
+/* SSO Enhancements: Add Application placeholder card */
+.app-card--add-placeholder {
+	cursor: pointer;
+	border: 2px dashed rgba(148, 163, 184, 0.4) !important;
+	background: transparent !important;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 398px;
+	padding: 24px;
+	box-shadow: none !important;
+	border-radius: 8px;
+	transition: all 220ms ease;
+	position: relative;
+}
+
+.app-card--add-placeholder:hover {
+	border-color: #0f766e !important;
+	background: rgba(15, 118, 110, 0.03) !important;
+}
+
+.app-card--add-placeholder__icon {
+	width: 64px;
+	height: 64px;
+	border-radius: 50%;
+	background: rgba(148, 163, 184, 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 16px;
+	color: #64748b;
+	font-size: 1.8rem;
+	transition: all 220ms ease;
+}
+
+.app-card--add-placeholder:hover .app-card--add-placeholder__icon {
+	background: #0f766e;
+	color: #ffffff;
+	transform: scale(1.06);
+}
+
+.app-card--add-placeholder h3 {
+	margin: 0 0 8px;
+	font-size: 1.15rem;
+	color: #475569;
+	font-weight: 700;
+	transition: color 220ms ease;
+}
+
+.app-card--add-placeholder:hover h3 {
+	color: #0f766e;
+}
+
+.app-card--add-placeholder p {
+	margin: 0;
+	font-size: 0.88rem;
+	color: #94a3b8;
+	text-align: center;
+	line-height: 1.4;
+}
+
+html[data-theme="dark"] .app-card--add-placeholder h3 {
+	color: #cbd5e1;
+}
+
+html[data-theme="dark"] .app-card--add-placeholder:hover h3 {
+	color: #2dd4bf;
+}
+
+html[data-theme="dark"] .app-card--add-placeholder:hover {
+	border-color: #2dd4bf !important;
+	background: rgba(45, 212, 191, 0.04) !important;
+}
+
+html[data-theme="dark"] .app-card--add-placeholder:hover .app-card--add-placeholder__icon {
+	background: #2dd4bf;
+	color: #08111f;
+}
+
+/* ─────────────────────────────────────────
+   Add Application Dialog Form Styling
+   ───────────────────────────────────────── */
+.add-app-dialog .p-dialog-header {
+	background: linear-gradient(135deg, #09263b 0%, #0f766e 60%, #b85323 100%);
+	border-bottom: none;
+	padding: 20px 24px 16px;
+	border-radius: 8px 8px 0 0;
+	color: #ffffff;
+}
+
+.add-app-dialog .p-dialog-header-icon {
+	color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.add-app-dialog .p-dialog-header-icon:enabled:hover {
+	color: #ffffff !important;
+	background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.add-app-dialog .p-dialog-content {
+	padding: 24px;
+	background: #f4f7fb;
+	border-radius: 0 0 8px 8px;
+}
+
+html[data-theme="dark"] .add-app-dialog .p-dialog-content {
+	background: #08111f;
+	color: #cbd5e1;
+}
+
+.add-app-dialog-header {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+
+.add-app-dialog-header__icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.15);
+	color: #ffffff;
+	font-size: 1.25rem;
+}
+
+.add-app-dialog-header__eyebrow {
+	margin: 0;
+	font-size: 0.75rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: rgba(255, 255, 255, 0.78);
+}
+
+.add-app-dialog-header__title {
+	margin: 2px 0 0;
+	font-size: 1.25rem;
+	font-weight: 900;
+	color: #ffffff;
+}
+
+.add-app-form {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.form-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.form-field label {
+	font-size: 0.88rem;
+	font-weight: 800;
+	color: #334155;
+}
+
+html[data-theme="dark"] .form-field label {
+	color: #94a3b8;
+}
+
+.add-app-form .p-inputtext {
+	width: 100%;
+	min-height: 40px;
+	padding: 8px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	background: #ffffff;
+	color: #1e293b;
+	font-family: inherit;
+	font-size: 0.92rem;
+	transition: all 150ms ease;
+}
+
+html[data-theme="dark"] .add-app-form .p-inputtext {
+	border-color: rgba(148, 163, 184, 0.24);
+	background: rgba(15, 23, 42, 0.4);
+	color: #f8fafc;
+}
+
+.add-app-form .p-inputtext:focus {
+	border-color: #0f766e;
+	box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+	outline: none;
+}
+
+html[data-theme="dark"] .add-app-form .p-inputtext:focus {
+	border-color: #2dd4bf;
+	box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
+}
+
+.form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+.form-select {
+	min-height: 40px;
+	padding: 8px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	background: #ffffff;
+	color: #1e293b;
+	font-family: inherit;
+	font-size: 0.92rem;
+	outline: none;
+	cursor: pointer;
+	transition: all 150ms ease;
+}
+
+html[data-theme="dark"] .form-select {
+	border-color: rgba(148, 163, 184, 0.24);
+	background: #0c1626;
+	color: #f8fafc;
+}
+
+.form-select:focus {
+	border-color: #0f766e;
+	box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+html[data-theme="dark"] .form-select:focus {
+	border-color: #2dd4bf;
+	box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
+}
+
+.form-file-input {
+	padding: 8px 0;
+	font-family: inherit;
+	font-size: 0.88rem;
+	color: #475569;
+	cursor: pointer;
+}
+
+html[data-theme="dark"] .form-file-input {
+	color: #cbd5e1;
+}
+
+.form-image-preview {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-top: 8px;
+	padding: 10px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	background: #ffffff;
+}
+
+html[data-theme="dark"] .form-image-preview {
+	border-color: rgba(148, 163, 184, 0.16);
+	background: rgba(15, 23, 42, 0.3);
+}
+
+.form-image-preview img {
+	width: 80px;
+	height: 50px;
+	object-fit: cover;
+	border-radius: 4px;
+	border: 1px solid #e2e8f0;
+}
+
+html[data-theme="dark"] .form-image-preview img {
+	border-color: rgba(148, 163, 184, 0.16);
+}
+
+.remove-preview-btn {
+	padding: 6px 12px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: #ef4444;
+	background: rgba(239, 68, 68, 0.1);
+	border: 1px solid rgba(239, 68, 68, 0.2);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 150ms ease;
+}
+
+.remove-preview-btn:hover {
+	background: #ef4444;
+	color: #ffffff;
+}
+
+.form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 10px;
+}
+
+.form-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 40px;
+	padding: 8px 20px;
+	border-radius: 6px;
+	font-size: 0.88rem;
+	font-weight: 800;
+	font-family: inherit;
+	cursor: pointer;
+	transition: all 150ms ease;
+}
+
+.form-btn--cancel {
+	background: #f1f5f9;
+	color: #475569;
+	border: 1px solid #cbd5e1;
+}
+
+html[data-theme="dark"] .form-btn--cancel {
+	background: rgba(148, 163, 184, 0.08);
+	color: #cbd5e1;
+	border-color: rgba(148, 163, 184, 0.2);
+}
+
+.form-btn--cancel:hover {
+	background: #e2e8f0;
+	color: #1e293b;
+}
+
+html[data-theme="dark"] .form-btn--cancel:hover {
+	background: rgba(148, 163, 184, 0.15);
+	color: #f8fafc;
+}
+
+.form-btn--submit {
+	background: #0f766e;
+	color: #ffffff;
+	border: none;
+	box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2);
+}
+
+html[data-theme="dark"] .form-btn--submit {
+	background: #2dd4bf;
+	color: #08111f;
+	box-shadow: 0 4px 12px rgba(45, 212, 191, 0.2);
+}
+
+.form-btn--submit:hover {
+	background: #0d6460;
+	transform: translateY(-1px);
+}
+
+html[data-theme="dark"] .form-btn--submit:hover {
+	background: #14b8a6;
+}
+
+/* ─────────────────────────────────────────
+   Admin Edit/Delete Controls on Cards
+   ───────────────────────────────────────── */
+.app-card {
+	position: relative; /* ensure absolute children are positioned relative to card */
+}
+
+.app-card__admin-controls {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	z-index: 5;
+	display: flex;
+	gap: 8px;
+	opacity: 0.85;
+	transition: opacity 180ms ease;
+}
+
+.app-card:hover .app-card__admin-controls {
+	opacity: 1;
+}
+
+.app-card__admin-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	border: none;
+	cursor: pointer;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+	color: #ffffff;
+	font-size: 0.85rem;
+	transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.app-card__admin-btn:hover {
+	transform: scale(1.1);
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+}
+
+.app-card__admin-btn--edit {
+	background: #0284c7; /* blue-600 */
+}
+
+.app-card__admin-btn--edit:hover {
+	background: #0369a1; /* blue-700 */
+}
+
+.app-card__admin-btn--delete {
+	background: #ef4444; /* red-500 */
+}
+
+.app-card__admin-btn--delete:hover {
+	background: #dc2626; /* red-600 */
+}
+
+html[data-theme="dark"] .app-card__admin-btn {
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* ─────────────────────────────────────────
+   Quick Link Add Placeholder Styling
+   ───────────────────────────────────────── */
+.quick-link--add-placeholder {
+	border: 1px dashed rgba(15, 118, 110, 0.4) !important;
+	background: transparent !important;
+	color: #0f766e !important;
+	box-shadow: none !important;
+}
+
+.quick-link--add-placeholder i {
+	background: rgba(15, 118, 110, 0.1) !important;
+	color: #0f766e !important;
+}
+
+.quick-link--add-placeholder:hover {
+	border-color: #0f766e !important;
+	background: rgba(15, 118, 110, 0.04) !important;
+	transform: translateY(-2px) !important;
+}
+
+html[data-theme="dark"] .quick-link--add-placeholder {
+	border-color: rgba(45, 212, 191, 0.4) !important;
+	color: #2dd4bf !important;
+}
+
+html[data-theme="dark"] .quick-link--add-placeholder i {
+	background: rgba(45, 212, 191, 0.1) !important;
+	color: #2dd4bf !important;
+}
+
+html[data-theme="dark"] .quick-link--add-placeholder:hover {
+	border-color: #2dd4bf !important;
+	background: rgba(45, 212, 191, 0.04) !important;
+}
+
+
+

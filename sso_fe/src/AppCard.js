@@ -10,20 +10,62 @@ export default function AppCard({
 	category,
 	accent,
 	icon = "pi pi-box",
+	showAdminControls = false,
+	onEdit,
+	onDelete,
 }) {
 	const token = localStorage.getItem("token");
-	const imageSrc = require("./staticFiles/" + imageName);
+	let imageSrc;
+	if (imageName && (imageName.startsWith("data:image/") || imageName.startsWith("http://") || imageName.startsWith("https://"))) {
+		imageSrc = imageName;
+	} else {
+		try {
+			imageSrc = require("./staticFiles/" + imageName);
+		} catch (e) {
+			imageSrc = "";
+		}
+	}
 
 	const openApplication = () => {
-		const separator = linkTo.includes("?") ? "&" : "?";
-		const hasToken = linkTo.includes("token=");
+		let targetUrl = linkTo || "";
+		if (targetUrl && !/^https?:\/\//i.test(targetUrl) && !/^\/\//.test(targetUrl) && !/^[/#]/.test(targetUrl)) {
+			targetUrl = `https://${targetUrl}`;
+		}
+		const separator = targetUrl.includes("?") ? "&" : "?";
+		const hasToken = targetUrl.includes("token=");
 		const tokenQuery = (token && !hasToken) ? `${separator}token=${encodeURIComponent(token)}` : "";
 
-		window.open(`${linkTo}${tokenQuery}`, "_blank", "noopener,noreferrer");
+		window.open(`${targetUrl}${tokenQuery}`, "_blank", "noopener,noreferrer");
 	};
 
 	return (
 		<article className={`app-card app-card--${accent || "blue"}`}>
+			{showAdminControls && (
+				<div className="app-card__admin-controls">
+					<button
+						type="button"
+						className="app-card__admin-btn app-card__admin-btn--edit"
+						onClick={(e) => {
+							e.stopPropagation();
+							if (onEdit) onEdit();
+						}}
+						title="Edit Application"
+					>
+						<i className="pi pi-pencil" />
+					</button>
+					<button
+						type="button"
+						className="app-card__admin-btn app-card__admin-btn--delete"
+						onClick={(e) => {
+							e.stopPropagation();
+							if (onDelete) onDelete();
+						}}
+						title="Delete Application"
+					>
+						<i className="pi pi-trash" />
+					</button>
+				</div>
+			)}
 			<div className="app-card__media">
 				<img src={imageSrc} alt="" loading="lazy" />
 				<span className="app-card__category">{category}</span>

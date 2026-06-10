@@ -249,22 +249,249 @@ export default function Dashboard() {
 	const [now, setNow] = useState(() => new Date());
 	const [currentUserId, setCurrentUserId] = useState("");
 	const [activeUsers, setActiveUsers] = useState([]);
+	const [customApps, setCustomApps] = useState(() => {
+		const saved = localStorage.getItem("sso_custom_apps");
+		return saved ? JSON.parse(saved) : [];
+	});
+	const [showAddAppDialog, setShowAddAppDialog] = useState(false);
+	const [newAppTitle, setNewAppTitle] = useState("");
+	const [newAppDesc, setNewAppDesc] = useState("");
+	const [newAppUrl, setNewAppUrl] = useState("");
+	const [newAppAccent, setNewAppAccent] = useState("blue");
+	const [newAppIcon, setNewAppIcon] = useState("pi pi-box");
+	const [newAppImage, setNewAppImage] = useState("");
+
+	// Admin Deletion & Editing States
+	const [deletedStaticTitles, setDeletedStaticTitles] = useState(() => {
+		const saved = localStorage.getItem("sso_deleted_static_apps");
+		return saved ? JSON.parse(saved) : [];
+	});
+	const [modifiedStaticApps, setModifiedStaticApps] = useState(() => {
+		const saved = localStorage.getItem("sso_modified_static_apps");
+		return saved ? JSON.parse(saved) : [];
+	});
+
+	const [editingApp, setEditingApp] = useState(null);
+	const [showEditAppDialog, setShowEditAppDialog] = useState(false);
+	const [editAppTitle, setEditAppTitle] = useState("");
+	const [editAppDesc, setEditAppDesc] = useState("");
+	const [editAppUrl, setEditAppUrl] = useState("");
+	const [editAppAccent, setEditAppAccent] = useState("blue");
+	const [editAppIcon, setEditAppIcon] = useState("pi pi-box");
+	const [editAppImage, setEditAppImage] = useState("");
+	const [editAppOriginalTitle, setEditAppOriginalTitle] = useState("");
+
+	// Custom Quick Links States
+	const [customQuickLinks, setCustomQuickLinks] = useState(() => {
+		const saved = localStorage.getItem("sso_custom_quick_links");
+		return saved ? JSON.parse(saved) : [];
+	});
+	const [showAddQuickLinkDialog, setShowAddQuickLinkDialog] = useState(false);
+	const [newQuickLinkLabel, setNewQuickLinkLabel] = useState("");
+	const [newQuickLinkUrl, setNewQuickLinkUrl] = useState("");
+	const [newQuickLinkTone, setNewQuickLinkTone] = useState("teal");
+	const [newQuickLinkIcon, setNewQuickLinkIcon] = useState("pi pi-link");
+
+	const handleImageChange = (e) => {
+		const file = e.target.files && e.target.files[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			setNewAppImage(reader.result);
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleAddApp = (e) => {
+		if (e) e.preventDefault();
+		if (!newAppTitle || !newAppUrl) {
+			return;
+		}
+
+		const newApp = {
+			imageName: newAppImage || "GILogo.png",
+			linkTo: newAppUrl,
+			title: newAppTitle,
+			desc: newAppDesc,
+			category: "Custom",
+			accent: newAppAccent,
+			icon: newAppIcon,
+		};
+
+		const updatedApps = [...customApps, newApp];
+		setCustomApps(updatedApps);
+		localStorage.setItem("sso_custom_apps", JSON.stringify(updatedApps));
+		saveWorkspaceData({ custom_apps: updatedApps });
+
+		// Reset form state
+		setNewAppTitle("");
+		setNewAppDesc("");
+		setNewAppUrl("");
+		setNewAppAccent("blue");
+		setNewAppIcon("pi pi-box");
+		setNewAppImage("");
+		setShowAddAppDialog(false);
+	};
+
+	const handleDeleteApp = (app) => {
+		const isConfirmed = window.confirm(`Are you sure you want to delete the application "${app.title}"?`);
+		if (!isConfirmed) return;
+
+		const isStatic = applications.some((staticApp) => staticApp.title === app.title || (app.originalTitle && staticApp.title === app.originalTitle));
+
+		if (isStatic) {
+			const originalTitle = app.originalTitle || app.title;
+			const newDeleted = [...deletedStaticTitles, originalTitle];
+			setDeletedStaticTitles(newDeleted);
+			localStorage.setItem("sso_deleted_static_apps", JSON.stringify(newDeleted));
+			saveWorkspaceData({ deleted_static_apps: newDeleted });
+		} else {
+			const newCustom = customApps.filter((customApp) => customApp.title !== app.title);
+			setCustomApps(newCustom);
+			localStorage.setItem("sso_custom_apps", JSON.stringify(newCustom));
+			saveWorkspaceData({ custom_apps: newCustom });
+		}
+	};
+
+	const handleStartEdit = (app) => {
+		const isStatic = applications.some((staticApp) => staticApp.title === app.title || (app.originalTitle && staticApp.title === app.originalTitle));
+		
+		setEditingApp(app);
+		setEditAppTitle(app.title);
+		setEditAppDesc(app.desc);
+		setEditAppUrl(app.linkTo);
+		setEditAppAccent(app.accent || "blue");
+		setEditAppIcon(app.icon || "pi pi-box");
+		setEditAppImage(app.imageName || "");
+		setEditAppOriginalTitle(isStatic ? (app.originalTitle || app.title) : "");
+		setShowEditAppDialog(true);
+	};
+
+	const handleEditImageChange = (e) => {
+		const file = e.target.files && e.target.files[0];
+		if (!file) return;
+
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			setEditAppImage(reader.result);
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleSaveEdit = (e) => {
+		if (e) e.preventDefault();
+		if (!editAppTitle || !editAppUrl) return;
+
+		const isStatic = !!editAppOriginalTitle;
+
+		if (isStatic) {
+			const updatedApp = {
+				originalTitle: editAppOriginalTitle,
+				title: editAppTitle,
+				desc: editAppDesc,
+				linkTo: editAppUrl,
+				accent: editAppAccent,
+				icon: editAppIcon,
+				imageName: editAppImage || "GILogo.png",
+				category: editingApp.category
+			};
+
+			const otherModified = modifiedStaticApps.filter(
+				(mod) => mod.originalTitle !== editAppOriginalTitle
+			);
+			const newModified = [...otherModified, updatedApp];
+			setModifiedStaticApps(newModified);
+			localStorage.setItem("sso_modified_static_apps", JSON.stringify(newModified));
+			saveWorkspaceData({ modified_static_apps: newModified });
+		} else {
+			const updatedApp = {
+				title: editAppTitle,
+				desc: editAppDesc,
+				linkTo: editAppUrl,
+				accent: editAppAccent,
+				icon: editAppIcon,
+				imageName: editAppImage || "GILogo.png",
+				category: "Custom"
+			};
+
+			const newCustom = customApps.map((customApp) => 
+				customApp.title === editingApp.title ? updatedApp : customApp
+			);
+			setCustomApps(newCustom);
+			localStorage.setItem("sso_custom_apps", JSON.stringify(newCustom));
+			saveWorkspaceData({ custom_apps: newCustom });
+		}
+
+		// Reset form and close dialog
+		setEditingApp(null);
+		setEditAppTitle("");
+		setEditAppDesc("");
+		setEditAppUrl("");
+		setEditAppAccent("blue");
+		setEditAppIcon("pi pi-box");
+		setEditAppImage("");
+		setEditAppOriginalTitle("");
+		setShowEditAppDialog(false);
+	};
 
 	// Dynamic mapping of applications to inject the actual token for CRMS-ERLDC
 	const token = localStorage.getItem("token");
 	const mappedApplications = useMemo(() => {
-		return applications.map((app) => {
+		const activeStaticApps = applications.filter(
+			(app) => !deletedStaticTitles.includes(app.title)
+		);
+
+		return activeStaticApps.map((app) => {
+			const modification = modifiedStaticApps.find(
+				(mod) => mod.originalTitle === app.title
+			);
+
+			let resolvedApp = modification ? { ...app, ...modification } : app;
+
 			if (app.title === "CRMS-ERLDC") {
 				return {
-					...app,
+					...resolvedApp,
 					linkTo: token
 						? `https://crms.erldc.in/Codebook/accounts/login/?token=${encodeURIComponent(token)}`
-						: app.linkTo,
+						: resolvedApp.linkTo,
 				};
 			}
-			return app;
+			return resolvedApp;
 		});
-	}, [token]);
+	}, [token, deletedStaticTitles, modifiedStaticApps]);
+
+	const allApplications = useMemo(() => {
+		return [...mappedApplications, ...customApps];
+	}, [mappedApplications, customApps]);
+
+	const handleAddQuickLink = (e) => {
+		if (e) e.preventDefault();
+		if (!newQuickLinkLabel || !newQuickLinkUrl) return;
+
+		const newLink = {
+			label: newQuickLinkLabel,
+			url: newQuickLinkUrl,
+			tone: newQuickLinkTone,
+			icon: newQuickLinkIcon,
+		};
+
+		const updatedLinks = [...customQuickLinks, newLink];
+		setCustomQuickLinks(updatedLinks);
+		localStorage.setItem("sso_custom_quick_links", JSON.stringify(updatedLinks));
+		saveWorkspaceData({ custom_quick_links: updatedLinks });
+
+		// Reset form and close dialog
+		setNewQuickLinkLabel("");
+		setNewQuickLinkUrl("");
+		setNewQuickLinkTone("teal");
+		setNewQuickLinkIcon("pi pi-link");
+		setShowAddQuickLinkDialog(false);
+	};
+
+	const allQuickLinks = useMemo(() => {
+		return [...quickLinks, ...customQuickLinks];
+	}, [customQuickLinks]);
 
 	// Password expiry for the logged-in user
 	const [pwdExpiry, setPwdExpiry] = useState(null); // { daysRemaining, neverExpires }
@@ -344,6 +571,15 @@ export default function Dashboard() {
 		</div>
 	);
 
+	const saveWorkspaceData = (payload) => {
+		const token = localStorage.getItem("token");
+		axios.post(`${SSO_API}/workspace-data`, payload, {
+			headers: { Token: token }
+		}).catch((err) => {
+			console.error("Failed to save workspace data", err);
+		});
+	};
+
 	const onClickLogout = useCallback(() => {
 		axios
 			.post("https://sso.erldc.in:5000/logout", {
@@ -386,6 +622,24 @@ export default function Dashboard() {
 			setSessionExpiresAt(expiresAt);
 			setIsCheckingSession(false);
 
+			// Fetch workspace data from backend
+			axios
+				.get(`${SSO_API}/workspace-data`, {
+					headers: { Token: token },
+				})
+				.then((res) => {
+					const data = res.data;
+					if (data) {
+						if (data.custom_apps) setCustomApps(data.custom_apps);
+						if (data.deleted_static_apps) setDeletedStaticTitles(data.deleted_static_apps);
+						if (data.modified_static_apps) setModifiedStaticApps(data.modified_static_apps);
+						if (data.custom_quick_links) setCustomQuickLinks(data.custom_quick_links);
+					}
+				})
+				.catch((err) => {
+					console.error("Failed to fetch workspace data", err);
+				});
+
 			// Fetch password expiry for this user (non-blocking)
 			axios.post(`${SSO_API}/password-expiry`, {}, { headers: { Token: token } })
 				.then(res => setPwdExpiry(res.data))
@@ -425,14 +679,14 @@ export default function Dashboard() {
 	}, [isCheckingSession, now, onClickLogout, sessionExpiresAt]);
 
 	const categories = useMemo(
-		() => ["All", ...Array.from(new Set(mappedApplications.map((app) => app.category)))],
-		[mappedApplications]
+		() => ["All", ...Array.from(new Set(allApplications.map((app) => app.category)))],
+		[allApplications]
 	);
 
 	const filteredApps = useMemo(() => {
 		const normalizedQuery = query.trim().toLowerCase();
 
-		return mappedApplications.filter((app) => {
+		return allApplications.filter((app) => {
 			const categoryMatch =
 				activeCategory === "All" || app.category === activeCategory;
 			const queryMatch =
@@ -444,7 +698,7 @@ export default function Dashboard() {
 
 			return categoryMatch && queryMatch;
 		});
-	}, [activeCategory, query, mappedApplications]);
+	}, [activeCategory, query, allApplications]);
 
 	const todayDate = useMemo(
 		() =>
@@ -591,7 +845,7 @@ export default function Dashboard() {
 						<p>Applications</p>
 					</div>
 					<div>
-						<span>{quickLinks.length}</span>
+						<span>{allQuickLinks.length}</span>
 						<p>Quick links</p>
 					</div>
 					<div
@@ -707,11 +961,11 @@ export default function Dashboard() {
 						<p>Priority access</p>
 						<h2>Quick Links</h2>
 					</div>
-					<span>{quickLinks.length} external portals</span>
+					<span>{allQuickLinks.length} external portals</span>
 				</div>
 
 				<div className="quick-links" aria-label="Quick links">
-					{quickLinks.map((link) => (
+					{allQuickLinks.map((link) => (
 						<button
 							type="button"
 							key={link.label}
@@ -722,6 +976,16 @@ export default function Dashboard() {
 							<span>{link.label}</span>
 						</button>
 					))}
+					{userDepartment === "Information Technology (IT)" && (
+						<button
+							type="button"
+							className="quick-link quick-link--add-placeholder"
+							onClick={() => setShowAddQuickLinkDialog(true)}
+						>
+							<i className="pi pi-plus" aria-hidden="true" />
+							<span>Add Link</span>
+						</button>
+					)}
 				</div>
 
 				<div className="section-heading" id="applications">
@@ -734,8 +998,26 @@ export default function Dashboard() {
 
 				<div className="app-grid" aria-live="polite">
 					{filteredApps.map((app) => (
-						<AppCard key={app.title} {...app} />
+						<AppCard
+							key={app.title}
+							{...app}
+							showAdminControls={currentUserId === "00162"}
+							onEdit={() => handleStartEdit(app)}
+							onDelete={() => handleDeleteApp(app)}
+						/>
 					))}
+					{userDepartment === "Information Technology (IT)" && (
+						<article 
+							className="app-card app-card--add-placeholder"
+							onClick={() => setShowAddAppDialog(true)}
+						>
+							<div className="app-card--add-placeholder__icon">
+								<i className="pi pi-plus" />
+							</div>
+							<h3>Add Application</h3>
+							<p>Register a new internal workspace link</p>
+						</article>
+					)}
 				</div>
 
 				{filteredApps.length === 0 && (
@@ -878,6 +1160,364 @@ export default function Dashboard() {
 							/>
 						)}
 					</DataTable>
+				</Dialog>
+
+				<Dialog
+					visible={showAddAppDialog}
+					onHide={() => setShowAddAppDialog(false)}
+					className="add-app-dialog"
+					modal
+					header={
+						<div className="add-app-dialog-header">
+							<span className="add-app-dialog-header__icon">
+								<i className="pi pi-plus" />
+							</span>
+							<div>
+								<p className="add-app-dialog-header__eyebrow">IT Administrator Tools</p>
+								<h2 className="add-app-dialog-header__title">Add Application Card</h2>
+							</div>
+						</div>
+					}
+					style={{ width: "min(500px, 92vw)" }}
+				>
+					<form onSubmit={handleAddApp} className="add-app-form">
+						<div className="form-field">
+							<label htmlFor="app-title">Application Title *</label>
+							<InputText
+								id="app-title"
+								value={newAppTitle}
+								onChange={(e) => setNewAppTitle(e.target.value)}
+								placeholder="e.g. Weather Portal"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="app-desc">Short Description *</label>
+							<InputText
+								id="app-desc"
+								value={newAppDesc}
+								onChange={(e) => setNewAppDesc(e.target.value)}
+								placeholder="e.g. Real-time weather monitoring system"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="app-url">URL *</label>
+							<InputText
+								id="app-url"
+								value={newAppUrl}
+								onChange={(e) => setNewAppUrl(e.target.value)}
+								placeholder="e.g. https://weather.erldc.in"
+								required
+							/>
+						</div>
+
+						<div className="form-row">
+							<div className="form-field">
+								<label htmlFor="app-accent">Accent Color</label>
+								<select
+									id="app-accent"
+									value={newAppAccent}
+									onChange={(e) => setNewAppAccent(e.target.value)}
+									className="form-select"
+								>
+									<option value="blue">Blue</option>
+									<option value="green">Green</option>
+									<option value="red">Red</option>
+									<option value="amber">Amber</option>
+									<option value="indigo">Indigo</option>
+									<option value="violet">Violet</option>
+									<option value="teal">Teal</option>
+								</select>
+							</div>
+
+							<div className="form-field">
+								<label htmlFor="app-icon">Icon</label>
+								<select
+									id="app-icon"
+									value={newAppIcon}
+									onChange={(e) => setNewAppIcon(e.target.value)}
+									className="form-select"
+								>
+									<option value="pi pi-box">Box</option>
+									<option value="pi pi-desktop">Desktop</option>
+									<option value="pi pi-globe">Globe</option>
+									<option value="pi pi-chart-bar">Chart Bar</option>
+									<option value="pi pi-database">Database</option>
+									<option value="pi pi-wrench">Wrench</option>
+									<option value="pi pi-comments">Comments</option>
+									<option value="pi pi-bolt">Bolt</option>
+									<option value="pi pi-users">Users</option>
+								</select>
+							</div>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="app-image">Image File Upload</label>
+							<input
+								type="file"
+								id="app-image"
+								accept="image/*"
+								onChange={handleImageChange}
+								className="form-file-input"
+							/>
+							{newAppImage && (
+								<div className="form-image-preview">
+									<img src={newAppImage} alt="Preview" />
+									<button
+										type="button"
+										className="remove-preview-btn"
+										onClick={() => setNewAppImage("")}
+									>
+										Remove Image
+									</button>
+								</div>
+							)}
+						</div>
+
+						<div className="form-actions">
+							<button
+								type="button"
+								className="form-btn form-btn--cancel"
+								onClick={() => setShowAddAppDialog(false)}
+							>
+								Cancel
+							</button>
+							<button type="submit" className="form-btn form-btn--submit">
+								Add Card
+							</button>
+						</div>
+					</form>
+				</Dialog>
+
+				<Dialog
+					visible={showEditAppDialog}
+					onHide={() => setShowEditAppDialog(false)}
+					className="add-app-dialog"
+					modal
+					header={
+						<div className="add-app-dialog-header">
+							<span className="add-app-dialog-header__icon">
+								<i className="pi pi-pencil" />
+							</span>
+							<div>
+								<p className="add-app-dialog-header__eyebrow">IT Administrator Tools</p>
+								<h2 className="add-app-dialog-header__title">Modify Application Card</h2>
+							</div>
+						</div>
+					}
+					style={{ width: "min(500px, 92vw)" }}
+				>
+					<form onSubmit={handleSaveEdit} className="add-app-form">
+						<div className="form-field">
+							<label htmlFor="edit-app-title">Application Title *</label>
+							<InputText
+								id="edit-app-title"
+								value={editAppTitle}
+								onChange={(e) => setEditAppTitle(e.target.value)}
+								placeholder="e.g. Weather Portal"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="edit-app-desc">Short Description *</label>
+							<InputText
+								id="edit-app-desc"
+								value={editAppDesc}
+								onChange={(e) => setEditAppDesc(e.target.value)}
+								placeholder="e.g. Real-time weather monitoring system"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="edit-app-url">URL *</label>
+							<InputText
+								id="edit-app-url"
+								value={editAppUrl}
+								onChange={(e) => setEditAppUrl(e.target.value)}
+								placeholder="e.g. https://weather.erldc.in"
+								required
+							/>
+						</div>
+
+						<div className="form-row">
+							<div className="form-field">
+								<label htmlFor="edit-app-accent">Accent Color</label>
+								<select
+									id="edit-app-accent"
+									value={editAppAccent}
+									onChange={(e) => setEditAppAccent(e.target.value)}
+									className="form-select"
+								>
+									<option value="blue">Blue</option>
+									<option value="green">Green</option>
+									<option value="red">Red</option>
+									<option value="amber">Amber</option>
+									<option value="indigo">Indigo</option>
+									<option value="violet">Violet</option>
+									<option value="teal">Teal</option>
+								</select>
+							</div>
+
+							<div className="form-field">
+								<label htmlFor="edit-app-icon">Icon</label>
+								<select
+									id="edit-app-icon"
+									value={editAppIcon}
+									onChange={(e) => setEditAppIcon(e.target.value)}
+									className="form-select"
+								>
+									<option value="pi pi-box">Box</option>
+									<option value="pi pi-desktop">Desktop</option>
+									<option value="pi pi-globe">Globe</option>
+									<option value="pi pi-chart-bar">Chart Bar</option>
+									<option value="pi pi-database">Database</option>
+									<option value="pi pi-wrench">Wrench</option>
+									<option value="pi pi-comments">Comments</option>
+									<option value="pi pi-bolt">Bolt</option>
+									<option value="pi pi-users">Users</option>
+								</select>
+							</div>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="edit-app-image">Image File Upload</label>
+							<input
+								type="file"
+								id="edit-app-image"
+								accept="image/*"
+								onChange={handleEditImageChange}
+								className="form-file-input"
+							/>
+							{editAppImage && (
+								<div className="form-image-preview">
+									<img src={editAppImage} alt="Preview" />
+									<button
+										type="button"
+										className="remove-preview-btn"
+										onClick={() => setEditAppImage("")}
+									>
+										Remove Image
+									</button>
+								</div>
+							)}
+						</div>
+
+						<div className="form-actions">
+							<button
+								type="button"
+								className="form-btn form-btn--cancel"
+								onClick={() => setShowEditAppDialog(false)}
+							>
+								Cancel
+							</button>
+							<button type="submit" className="form-btn form-btn--submit">
+								Save Changes
+							</button>
+						</div>
+					</form>
+				</Dialog>
+
+				<Dialog
+					visible={showAddQuickLinkDialog}
+					onHide={() => setShowAddQuickLinkDialog(false)}
+					className="add-app-dialog"
+					modal
+					header={
+						<div className="add-app-dialog-header">
+							<span className="add-app-dialog-header__icon">
+								<i className="pi pi-link" />
+							</span>
+							<div>
+								<p className="add-app-dialog-header__eyebrow">IT Administrator Tools</p>
+								<h2 className="add-app-dialog-header__title">Add Quick Link</h2>
+							</div>
+						</div>
+					}
+					style={{ width: "min(460px, 92vw)" }}
+				>
+					<form onSubmit={handleAddQuickLink} className="add-app-form">
+						<div className="form-field">
+							<label htmlFor="ql-label">Link Label *</label>
+							<InputText
+								id="ql-label"
+								value={newQuickLinkLabel}
+								onChange={(e) => setNewQuickLinkLabel(e.target.value)}
+								placeholder="e.g. ERP System"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="ql-url">URL *</label>
+							<InputText
+								id="ql-url"
+								value={newQuickLinkUrl}
+								onChange={(e) => setNewQuickLinkUrl(e.target.value)}
+								placeholder="e.g. https://erp.erldc.in"
+								required
+							/>
+						</div>
+
+						<div className="form-row">
+							<div className="form-field">
+								<label htmlFor="ql-tone">Color Tone</label>
+								<select
+									id="ql-tone"
+									value={newQuickLinkTone}
+									onChange={(e) => setNewQuickLinkTone(e.target.value)}
+									className="form-select"
+								>
+									<option value="violet">Violet</option>
+									<option value="teal">Teal</option>
+									<option value="red">Red</option>
+									<option value="green">Green</option>
+									<option value="blue">Blue</option>
+									<option value="amber">Amber</option>
+									<option value="indigo">Indigo</option>
+								</select>
+							</div>
+
+							<div className="form-field">
+								<label htmlFor="ql-icon">Icon</label>
+								<select
+									id="ql-icon"
+									value={newQuickLinkIcon}
+									onChange={(e) => setNewQuickLinkIcon(e.target.value)}
+									className="form-select"
+								>
+									<option value="pi pi-link">Link</option>
+									<option value="pi pi-users">Users</option>
+									<option value="pi pi-globe">Globe</option>
+									<option value="pi pi-file-pdf">PDF Document</option>
+									<option value="pi pi-desktop">Desktop</option>
+									<option value="pi pi-lock-open">Lock Open</option>
+									<option value="pi pi-ban">Ban</option>
+									<option value="pi pi-eye">Eye</option>
+									<option value="pi pi-database">Database</option>
+									<option value="pi pi-file-edit">File Edit</option>
+									<option value="pi pi-file-excel">Excel File</option>
+								</select>
+							</div>
+						</div>
+
+						<div className="form-actions">
+							<button
+								type="button"
+								className="form-btn form-btn--cancel"
+								onClick={() => setShowAddQuickLinkDialog(false)}
+							>
+								Cancel
+							</button>
+							<button type="submit" className="form-btn form-btn--submit">
+								Add Link
+							</button>
+						</div>
+					</form>
 				</Dialog>
 			</section>
 		</main>
