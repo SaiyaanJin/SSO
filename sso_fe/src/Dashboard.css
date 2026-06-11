@@ -670,6 +670,62 @@ html[data-theme="dark"] .quick-link:hover {
 	font-size: 0.88rem;
 }
 
+.quick-link__actions {
+	display: flex;
+	gap: 4px;
+	margin-left: auto;
+	opacity: 0;
+	transition: opacity 160ms ease;
+}
+
+.quick-link:hover .quick-link__actions {
+	opacity: 1;
+}
+
+.quick-link__action-btn {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	padding: 4px;
+	color: #64748b;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	transition: background 160ms ease, color 160ms ease;
+}
+
+.quick-link__action-btn:hover {
+	background: rgba(15, 23, 42, 0.06);
+}
+
+.quick-link__action-btn--edit:hover {
+	color: #0f766e;
+}
+
+.quick-link__action-btn--delete:hover {
+	color: #ef4444;
+}
+
+/* Reset icon styling within quick link action buttons to prevent using general .quick-link i styles */
+.quick-link .quick-link__action-icon {
+	width: auto !important;
+	height: auto !important;
+	background: transparent !important;
+	border-radius: 0 !important;
+	color: inherit !important;
+	font-size: 0.88rem !important;
+	display: inline-block !important;
+	flex: none !important;
+}
+
+/* Make sure the click target spans correctly */
+.quick-link-click-target {
+	height: 100%;
+	display: flex;
+	align-items: center;
+}
+
 .app-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(318px, 1fr));

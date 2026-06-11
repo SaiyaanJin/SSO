@@ -292,6 +292,25 @@ export default function Dashboard() {
 	const [newQuickLinkTone, setNewQuickLinkTone] = useState("teal");
 	const [newQuickLinkIcon, setNewQuickLinkIcon] = useState("pi pi-link");
 
+	// Static Quick Links Mod/Delete States
+	const [deletedStaticQuickLinks, setDeletedStaticQuickLinks] = useState(() => {
+		const saved = localStorage.getItem("sso_deleted_static_quick_links");
+		return saved ? JSON.parse(saved) : [];
+	});
+	const [modifiedStaticQuickLinks, setModifiedStaticQuickLinks] = useState(() => {
+		const saved = localStorage.getItem("sso_modified_static_quick_links");
+		return saved ? JSON.parse(saved) : [];
+	});
+
+	// Editing Quick Link States
+	const [editingQuickLink, setEditingQuickLink] = useState(null);
+	const [showEditQuickLinkDialog, setShowEditQuickLinkDialog] = useState(false);
+	const [editQuickLinkLabel, setEditQuickLinkLabel] = useState("");
+	const [editQuickLinkUrl, setEditQuickLinkUrl] = useState("");
+	const [editQuickLinkTone, setEditQuickLinkTone] = useState("teal");
+	const [editQuickLinkIcon, setEditQuickLinkIcon] = useState("pi pi-link");
+	const [editQuickLinkOriginalLabel, setEditQuickLinkOriginalLabel] = useState("");
+
 	const handleImageChange = (e) => {
 		const file = e.target.files && e.target.files[0];
 		if (!file) return;
@@ -479,7 +498,11 @@ export default function Dashboard() {
 		const updatedLinks = [...customQuickLinks, newLink];
 		setCustomQuickLinks(updatedLinks);
 		localStorage.setItem("sso_custom_quick_links", JSON.stringify(updatedLinks));
-		saveWorkspaceData({ custom_quick_links: updatedLinks });
+		saveWorkspaceData({
+			custom_quick_links: updatedLinks,
+			deleted_static_quick_links: deletedStaticQuickLinks,
+			modified_static_quick_links: modifiedStaticQuickLinks
+		});
 
 		// Reset form and close dialog
 		setNewQuickLinkLabel("");
@@ -489,9 +512,116 @@ export default function Dashboard() {
 		setShowAddQuickLinkDialog(false);
 	};
 
+	const handleStartEditQuickLink = (link) => {
+		const isStatic = quickLinks.some((staticLink) => staticLink.label === link.label || (link.originalLabel && staticLink.label === link.originalLabel));
+
+		setEditingQuickLink(link);
+		setEditQuickLinkLabel(link.label);
+		setEditQuickLinkUrl(link.url);
+		setEditQuickLinkTone(link.tone || "teal");
+		setEditQuickLinkIcon(link.icon || "pi pi-link");
+		setEditQuickLinkOriginalLabel(isStatic ? (link.originalLabel || link.label) : "");
+		setShowEditQuickLinkDialog(true);
+	};
+
+	const handleDeleteQuickLink = (link) => {
+		const isConfirmed = window.confirm(`Are you sure you want to delete the quick link "${link.label}"?`);
+		if (!isConfirmed) return;
+
+		const isStatic = quickLinks.some((staticLink) => staticLink.label === link.label || (link.originalLabel && staticLink.label === link.originalLabel));
+
+		if (isStatic) {
+			const originalLabel = link.originalLabel || link.label;
+			const newDeleted = [...deletedStaticQuickLinks, originalLabel];
+			setDeletedStaticQuickLinks(newDeleted);
+			localStorage.setItem("sso_deleted_static_quick_links", JSON.stringify(newDeleted));
+			saveWorkspaceData({
+				deleted_static_quick_links: newDeleted,
+				modified_static_quick_links: modifiedStaticQuickLinks,
+				custom_quick_links: customQuickLinks
+			});
+		} else {
+			const newCustom = customQuickLinks.filter((customLink) => customLink.label !== link.label);
+			setCustomQuickLinks(newCustom);
+			localStorage.setItem("sso_custom_quick_links", JSON.stringify(newCustom));
+			saveWorkspaceData({
+				custom_quick_links: newCustom,
+				deleted_static_quick_links: deletedStaticQuickLinks,
+				modified_static_quick_links: modifiedStaticQuickLinks
+			});
+		}
+	};
+
+	const handleSaveEditQuickLink = (e) => {
+		if (e) e.preventDefault();
+		if (!editQuickLinkLabel || !editQuickLinkUrl) return;
+
+		const isStatic = !!editQuickLinkOriginalLabel;
+
+		if (isStatic) {
+			const updatedLink = {
+				originalLabel: editQuickLinkOriginalLabel,
+				label: editQuickLinkLabel,
+				url: editQuickLinkUrl,
+				tone: editQuickLinkTone,
+				icon: editQuickLinkIcon,
+			};
+
+			const otherModified = modifiedStaticQuickLinks.filter(
+				(mod) => mod.originalLabel !== editQuickLinkOriginalLabel
+			);
+			const newModified = [...otherModified, updatedLink];
+			setModifiedStaticQuickLinks(newModified);
+			localStorage.setItem("sso_modified_static_quick_links", JSON.stringify(newModified));
+			saveWorkspaceData({
+				modified_static_quick_links: newModified,
+				deleted_static_quick_links: deletedStaticQuickLinks,
+				custom_quick_links: customQuickLinks
+			});
+		} else {
+			const updatedLink = {
+				label: editQuickLinkLabel,
+				url: editQuickLinkUrl,
+				tone: editQuickLinkTone,
+				icon: editQuickLinkIcon,
+			};
+
+			const newCustom = customQuickLinks.map((customLink) => 
+				customLink.label === editingQuickLink.label ? updatedLink : customLink
+			);
+			setCustomQuickLinks(newCustom);
+			localStorage.setItem("sso_custom_quick_links", JSON.stringify(newCustom));
+			saveWorkspaceData({
+				custom_quick_links: newCustom,
+				deleted_static_quick_links: deletedStaticQuickLinks,
+				modified_static_quick_links: modifiedStaticQuickLinks
+			});
+		}
+
+		// Reset form and close dialog
+		setEditingQuickLink(null);
+		setEditQuickLinkLabel("");
+		setEditQuickLinkUrl("");
+		setEditQuickLinkTone("teal");
+		setEditQuickLinkIcon("pi pi-link");
+		setEditQuickLinkOriginalLabel("");
+		setShowEditQuickLinkDialog(false);
+	};
+
 	const allQuickLinks = useMemo(() => {
-		return [...quickLinks, ...customQuickLinks];
-	}, [customQuickLinks]);
+		const activeStaticQuickLinks = quickLinks.filter(
+			(link) => !deletedStaticQuickLinks.includes(link.label)
+		);
+
+		const mappedStaticQuickLinks = activeStaticQuickLinks.map((link) => {
+			const modification = modifiedStaticQuickLinks.find(
+				(mod) => mod.originalLabel === link.label
+			);
+			return modification ? { ...link, ...modification } : link;
+		});
+
+		return [...mappedStaticQuickLinks, ...customQuickLinks];
+	}, [customQuickLinks, deletedStaticQuickLinks, modifiedStaticQuickLinks]);
 
 	// Password expiry for the logged-in user
 	const [pwdExpiry, setPwdExpiry] = useState(null); // { daysRemaining, neverExpires }
@@ -634,6 +764,8 @@ export default function Dashboard() {
 						if (data.deleted_static_apps) setDeletedStaticTitles(data.deleted_static_apps);
 						if (data.modified_static_apps) setModifiedStaticApps(data.modified_static_apps);
 						if (data.custom_quick_links) setCustomQuickLinks(data.custom_quick_links);
+						if (data.deleted_static_quick_links) setDeletedStaticQuickLinks(data.deleted_static_quick_links);
+						if (data.modified_static_quick_links) setModifiedStaticQuickLinks(data.modified_static_quick_links);
 					}
 				})
 				.catch((err) => {
@@ -966,15 +1098,46 @@ export default function Dashboard() {
 
 				<div className="quick-links" aria-label="Quick links">
 					{allQuickLinks.map((link) => (
-						<button
-							type="button"
+						<div
 							key={link.label}
 							className={`quick-link quick-link--${link.tone}`}
-							onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
+							style={{ display: "flex", alignItems: "center", position: "relative" }}
 						>
-							<i className={link.icon} aria-hidden="true" />
-							<span>{link.label}</span>
-						</button>
+							<div
+								onClick={() => window.open(link.url, "_blank", "noopener,noreferrer")}
+								className="quick-link-click-target"
+								style={{ display: "flex", alignItems: "center", gap: "8px", flexGrow: 1, cursor: "pointer", height: "100%", paddingRight: userDepartment === "Information Technology (IT)" ? "8px" : "0" }}
+							>
+								<i className={link.icon} aria-hidden="true" />
+								<span>{link.label}</span>
+							</div>
+							{userDepartment === "Information Technology (IT)" && (
+								<div className="quick-link__actions" style={{ display: "flex", gap: "4px", marginLeft: "auto", position: "relative", zIndex: 2 }}>
+									<button
+										type="button"
+										className="quick-link__action-btn quick-link__action-btn--edit"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleStartEditQuickLink(link);
+										}}
+										title="Edit Quick Link"
+									>
+										<i className="pi pi-pencil quick-link__action-icon" />
+									</button>
+									<button
+										type="button"
+										className="quick-link__action-btn quick-link__action-btn--delete"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleDeleteQuickLink(link);
+										}}
+										title="Delete Quick Link"
+									>
+										<i className="pi pi-trash quick-link__action-icon" />
+									</button>
+								</div>
+							)}
+						</div>
 					))}
 					{userDepartment === "Information Technology (IT)" && (
 						<button
@@ -1001,7 +1164,8 @@ export default function Dashboard() {
 						<AppCard
 							key={app.title}
 							{...app}
-							showAdminControls={currentUserId === "00162"}
+							showEditOption={currentUserId === "00162" || userDepartment === "Information Technology (IT)"}
+							showDeleteOption={currentUserId === "00162"}
 							onEdit={() => handleStartEdit(app)}
 							onDelete={() => handleDeleteApp(app)}
 						/>
@@ -1515,6 +1679,104 @@ export default function Dashboard() {
 							</button>
 							<button type="submit" className="form-btn form-btn--submit">
 								Add Link
+							</button>
+						</div>
+					</form>
+				</Dialog>
+
+				<Dialog
+					visible={showEditQuickLinkDialog}
+					onHide={() => setShowEditQuickLinkDialog(false)}
+					className="add-app-dialog"
+					modal
+					header={
+						<div className="add-app-dialog-header">
+							<span className="add-app-dialog-header__icon">
+								<i className="pi pi-pencil" />
+							</span>
+							<div>
+								<p className="add-app-dialog-header__eyebrow">IT Administrator Tools</p>
+								<h2 className="add-app-dialog-header__title">Modify Quick Link</h2>
+							</div>
+						</div>
+					}
+					style={{ width: "min(460px, 92vw)" }}
+				>
+					<form onSubmit={handleSaveEditQuickLink} className="add-app-form">
+						<div className="form-field">
+							<label htmlFor="edit-ql-label">Link Label *</label>
+							<InputText
+								id="edit-ql-label"
+								value={editQuickLinkLabel}
+								onChange={(e) => setEditQuickLinkLabel(e.target.value)}
+								placeholder="e.g. ERP System"
+								required
+							/>
+						</div>
+
+						<div className="form-field">
+							<label htmlFor="edit-ql-url">URL *</label>
+							<InputText
+								id="edit-ql-url"
+								value={editQuickLinkUrl}
+								onChange={(e) => setEditQuickLinkUrl(e.target.value)}
+								placeholder="e.g. https://erp.erldc.in"
+								required
+							/>
+						</div>
+
+						<div className="form-row">
+							<div className="form-field">
+								<label htmlFor="edit-ql-tone">Color Tone</label>
+								<select
+									id="edit-ql-tone"
+									value={editQuickLinkTone}
+									onChange={(e) => setEditQuickLinkTone(e.target.value)}
+									className="form-select"
+								>
+									<option value="violet">Violet</option>
+									<option value="teal">Teal</option>
+									<option value="red">Red</option>
+									<option value="green">Green</option>
+									<option value="blue">Blue</option>
+									<option value="amber">Amber</option>
+									<option value="indigo">Indigo</option>
+								</select>
+							</div>
+
+							<div className="form-field">
+								<label htmlFor="edit-ql-icon">Icon</label>
+								<select
+									id="edit-ql-icon"
+									value={editQuickLinkIcon}
+									onChange={(e) => setEditQuickLinkIcon(e.target.value)}
+									className="form-select"
+								>
+									<option value="pi pi-link">Link</option>
+									<option value="pi pi-users">Users</option>
+									<option value="pi pi-globe">Globe</option>
+									<option value="pi pi-file-pdf">PDF Document</option>
+									<option value="pi pi-desktop">Desktop</option>
+									<option value="pi pi-lock-open">Lock Open</option>
+									<option value="pi pi-ban">Ban</option>
+									<option value="pi pi-eye">Eye</option>
+									<option value="pi pi-database">Database</option>
+									<option value="pi pi-file-edit">File Edit</option>
+									<option value="pi pi-file-excel">Excel File</option>
+								</select>
+							</div>
+						</div>
+
+						<div className="form-actions">
+							<button
+								type="button"
+								className="form-btn form-btn--cancel"
+								onClick={() => setShowEditQuickLinkDialog(false)}
+							>
+								Cancel
+							</button>
+							<button type="submit" className="form-btn form-btn--submit">
+								Save Changes
 							</button>
 						</div>
 					</form>

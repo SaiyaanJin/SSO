@@ -2517,7 +2517,9 @@ def get_workspace_data():
         "custom_apps": _read_json_file("sso_custom_apps.json"),
         "deleted_static_apps": _read_json_file("sso_deleted_static_apps.json"),
         "modified_static_apps": _read_json_file("sso_modified_static_apps.json"),
-        "custom_quick_links": _read_json_file("sso_custom_quick_links.json")
+        "custom_quick_links": _read_json_file("sso_custom_quick_links.json"),
+        "deleted_static_quick_links": _read_json_file("sso_deleted_static_quick_links.json"),
+        "modified_static_quick_links": _read_json_file("sso_modified_static_quick_links.json")
     })
 
 
@@ -2538,6 +2540,10 @@ def update_workspace_data():
         _write_json_file("sso_custom_apps.json", data["custom_apps"])
     if "custom_quick_links" in data:
         _write_json_file("sso_custom_quick_links.json", data["custom_quick_links"])
+    if "deleted_static_quick_links" in data:
+        _write_json_file("sso_deleted_static_quick_links.json", data["deleted_static_quick_links"])
+    if "modified_static_quick_links" in data:
+        _write_json_file("sso_modified_static_quick_links.json", data["modified_static_quick_links"])
 
     if user_id == "00162":
         if "deleted_static_apps" in data:

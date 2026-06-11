@@ -10,7 +10,8 @@ export default function AppCard({
 	category,
 	accent,
 	icon = "pi pi-box",
-	showAdminControls = false,
+	showEditOption = false,
+	showDeleteOption = false,
 	onEdit,
 	onDelete,
 }) {
@@ -40,30 +41,34 @@ export default function AppCard({
 
 	return (
 		<article className={`app-card app-card--${accent || "blue"}`}>
-			{showAdminControls && (
+			{(showEditOption || showDeleteOption) && (
 				<div className="app-card__admin-controls">
-					<button
-						type="button"
-						className="app-card__admin-btn app-card__admin-btn--edit"
-						onClick={(e) => {
-							e.stopPropagation();
-							if (onEdit) onEdit();
-						}}
-						title="Edit Application"
-					>
-						<i className="pi pi-pencil" />
-					</button>
-					<button
-						type="button"
-						className="app-card__admin-btn app-card__admin-btn--delete"
-						onClick={(e) => {
-							e.stopPropagation();
-							if (onDelete) onDelete();
-						}}
-						title="Delete Application"
-					>
-						<i className="pi pi-trash" />
-					</button>
+					{showEditOption && (
+						<button
+							type="button"
+							className="app-card__admin-btn app-card__admin-btn--edit"
+							onClick={(e) => {
+								e.stopPropagation();
+								if (onEdit) onEdit();
+							}}
+							title="Edit Application"
+						>
+							<i className="pi pi-pencil" />
+						</button>
+					)}
+					{showDeleteOption && (
+						<button
+							type="button"
+							className="app-card__admin-btn app-card__admin-btn--delete"
+							onClick={(e) => {
+								e.stopPropagation();
+								if (onDelete) onDelete();
+							}}
+							title="Delete Application"
+						>
+							<i className="pi pi-trash" />
+						</button>
+					)}
 				</div>
 			)}
 			<div className="app-card__media">
