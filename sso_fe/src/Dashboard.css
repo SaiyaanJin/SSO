@@ -1077,7 +1077,8 @@ html[data-theme="dark"] .emp-dir-dialog .p-dialog-content {
 .emp-dir-table-toolbar {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
+	gap: 12px;
 	padding: 14px 18px;
 	border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 	background: rgba(255, 255, 255, 0.94);
@@ -1088,6 +1089,84 @@ html[data-theme="dark"] .emp-dir-table-toolbar {
 	border-bottom-color: rgba(148, 163, 184, 0.12);
 	background: rgba(8, 17, 31, 0.94);
 }
+
+/* ── Export Buttons ─────────────────────────────────────────────────── */
+.emp-dir-export-btns {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+.emp-dir-export-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 14px;
+	border-radius: 8px;
+	border: 1px solid;
+	font-size: 0.84rem;
+	font-weight: 800;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 150ms ease, box-shadow 150ms ease, transform 120ms ease;
+	white-space: nowrap;
+}
+
+.emp-dir-export-btn:active {
+	transform: scale(0.97);
+}
+
+.emp-dir-export-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+/* Excel — green */
+.emp-dir-export-btn--excel {
+	border-color: rgba(22, 163, 74, 0.35);
+	background: rgba(22, 163, 74, 0.09);
+	color: #15803d;
+}
+
+.emp-dir-export-btn--excel:hover {
+	background: rgba(22, 163, 74, 0.17);
+	box-shadow: 0 4px 12px rgba(22, 163, 74, 0.18);
+}
+
+html[data-theme="dark"] .emp-dir-export-btn--excel {
+	border-color: rgba(74, 222, 128, 0.28);
+	background: rgba(74, 222, 128, 0.08);
+	color: #4ade80;
+}
+
+html[data-theme="dark"] .emp-dir-export-btn--excel:hover {
+	background: rgba(74, 222, 128, 0.15);
+}
+
+/* Word — blue */
+.emp-dir-export-btn--word {
+	border-color: rgba(37, 99, 235, 0.35);
+	background: rgba(37, 99, 235, 0.08);
+	color: #1d4ed8;
+}
+
+.emp-dir-export-btn--word:hover {
+	background: rgba(37, 99, 235, 0.16);
+	box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+}
+
+html[data-theme="dark"] .emp-dir-export-btn--word {
+	border-color: rgba(96, 165, 250, 0.28);
+	background: rgba(96, 165, 250, 0.08);
+	color: #60a5fa;
+}
+
+html[data-theme="dark"] .emp-dir-export-btn--word:hover {
+	background: rgba(96, 165, 250, 0.15);
+}
+
 
 .emp-dir-search-wrap {
 	display: flex;

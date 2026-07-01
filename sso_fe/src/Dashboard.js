@@ -12,6 +12,9 @@ import { jwtDecode as jwt_decode } from "jwt-decode";
 import GILogo from "./staticFiles/GILogo.png";
 import "./cssFiles/ButtonDemo.css";
 import "./Dashboard.css";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType, HeadingLevel, BorderStyle } from "docx";
 
 const SESSION_DURATION_MS = 5 * 60 * 60 * 1000;
 
@@ -688,6 +691,142 @@ export default function Dashboard() {
 		setGlobalFilterValue(value);
 	};
 
+	// ── Export helpers ────────────────────────────────────────────────────────
+	const getExportRows = () =>
+		empTableData.map((emp, idx) => ({
+			"S.No.": idx + 1,
+			"Name": emp.Name || "",
+			"Department": emp.Department || "",
+			"Employee ID": emp.Emp_id || "",
+			"Email ID": emp.Mail || "",
+			"Contact Number": emp.Mobile || "",
+		}));
+
+	const downloadAsExcel = () => {
+		const rows = getExportRows();
+		const ws = XLSX.utils.json_to_sheet(rows);
+		// Set column widths
+		ws["!cols"] = [
+			{ wch: 7  }, // S.No.
+			{ wch: 32 }, // Name
+			{ wch: 36 }, // Department
+			{ wch: 14 }, // Employee ID
+			{ wch: 38 }, // Email ID
+			{ wch: 18 }, // Contact Number
+		];
+		const wb = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(wb, ws, "Employee Directory");
+		XLSX.writeFile(wb, "ERLDC_Employee_Directory.xlsx");
+	};
+
+	const downloadAsWord = async () => {
+		const rows = getExportRows();
+		const headers = ["S.No.", "Name", "Department", "Employee ID", "Email ID", "Contact Number"];
+		const colWidths = [600, 2000, 2800, 1400, 3000, 1800]; // twips (1/20 pt)
+
+		const cellBorder = {
+			top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+			bottom: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+			left: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+			right: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" },
+		};
+
+		const makeCell = (text, isHeader = false) =>
+			new TableCell({
+				borders: cellBorder,
+				shading: isHeader ? { fill: "1E3A5F" } : undefined,
+				children: [
+					new Paragraph({
+						children: [
+							new TextRun({
+								text: String(text),
+								bold: isHeader,
+								color: isHeader ? "FFFFFF" : "1E293B",
+								size: isHeader ? 22 : 20,
+								font: "Calibri",
+							}),
+						],
+						alignment: AlignmentType.LEFT,
+					}),
+				],
+				width: { size: colWidths[headers.indexOf(String(text)) !== -1 ? headers.indexOf(String(text)) : 0], type: WidthType.DXA },
+			});
+
+		const makeDataCell = (text, colIdx) =>
+			new TableCell({
+				borders: cellBorder,
+				children: [
+					new Paragraph({
+						children: [
+							new TextRun({
+								text: String(text || ""),
+								color: "1E293B",
+								size: 20,
+								font: "Calibri",
+							}),
+						],
+						alignment: AlignmentType.LEFT,
+					}),
+				],
+				width: { size: colWidths[colIdx], type: WidthType.DXA },
+			});
+
+		const headerRow = new TableRow({
+			tableHeader: true,
+			children: headers.map((h) => makeCell(h, true)),
+		});
+
+		const dataRows = rows.map(
+			(row) =>
+				new TableRow({
+					children: Object.values(row).map((val, idx) => makeDataCell(val, idx)),
+				})
+		);
+
+		const table = new Table({
+			width: { size: 11000, type: WidthType.DXA },
+			rows: [headerRow, ...dataRows],
+		});
+
+		const doc = new Document({
+			sections: [
+				{
+					properties: {},
+					children: [
+						new Paragraph({
+							heading: HeadingLevel.HEADING_1,
+							children: [
+								new TextRun({
+									text: "ERLDC – Employee Directory",
+									bold: true,
+									color: "1E3A5F",
+									size: 32,
+									font: "Calibri",
+								}),
+							],
+						}),
+						new Paragraph({
+							children: [
+								new TextRun({
+									text: `Total Personnel: ${rows.length}  |  Generated: ${new Date().toLocaleString("en-IN")}`,
+									color: "64748B",
+									size: 18,
+									italics: true,
+									font: "Calibri",
+								}),
+							],
+							spacing: { after: 240 },
+						}),
+						table,
+					],
+				},
+			],
+		});
+
+		const blob = await Packer.toBlob(doc);
+		saveAs(blob, "ERLDC_Employee_Directory.docx");
+	};
+
 	const header = (
 		<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
 			<span className="p-input-icon-left">
@@ -1229,6 +1368,28 @@ export default function Dashboard() {
 										className="emp-dir-search-input"
 									/>
 								</span>
+								<div className="emp-dir-export-btns">
+									<button
+										type="button"
+										className="emp-dir-export-btn emp-dir-export-btn--excel"
+										onClick={downloadAsExcel}
+										title="Download as Excel (.xlsx)"
+										disabled={empTableData.length === 0}
+									>
+										<i className="pi pi-file-excel" />
+										<span>Excel</span>
+									</button>
+									<button
+										type="button"
+										className="emp-dir-export-btn emp-dir-export-btn--word"
+										onClick={downloadAsWord}
+										title="Download as Word (.docx)"
+										disabled={empTableData.length === 0}
+									>
+										<i className="pi pi-file-word" />
+										<span>Word</span>
+									</button>
+								</div>
 							</div>
 						}
 						emptyMessage={
