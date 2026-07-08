@@ -127,6 +127,10 @@ const applications = [
 		category: "Operations",
 		accent: "teal",
 		icon: "pi pi-desktop",
+		links: [
+			{ label: "Old CRMS", url: "https://crms.erldc.in/Codebook/accounts/login/", icon: "pi pi-history" },
+			{ label: "New CRMS", url: "http://10.3.230.130:8000/", icon: "pi pi-star" },
+		],
 	},
 	{
 		imageName: "MIS.png",
@@ -471,14 +475,8 @@ export default function Dashboard() {
 
 			let resolvedApp = modification ? { ...app, ...modification } : app;
 
-			if (app.title === "CRMS-ERLDC") {
-				return {
-					...resolvedApp,
-					linkTo: token
-						? `https://crms.erldc.in/Codebook/accounts/login/?token=${encodeURIComponent(token)}`
-						: resolvedApp.linkTo,
-				};
-			}
+			// CRMS-ERLDC: links are kept with raw URLs; AppCard injects the token at click time
+			
 			return resolvedApp;
 		});
 	}, [token, deletedStaticTitles, modifiedStaticApps]);
