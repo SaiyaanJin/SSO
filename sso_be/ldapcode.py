@@ -2554,6 +2554,45 @@ def update_workspace_data():
     return jsonify({"status": "success"})
 
 
+# ─────────────────────────────────────────────────────────────────
+#  Site Visit Counter  (no auth required – public)
+# ─────────────────────────────────────────────────────────────────
+VISIT_COUNT_FILE = os.path.join(DATA_DIR, "site_visit_count.json")
+VISIT_COUNT_SEED  = 4892   # assumed visits before this counter went live
+_visit_lock = __import__("threading").Lock()
+
+
+def _get_visit_count():
+    """Read current visit count from disk, seeding if file absent."""
+    import json
+    if not os.path.exists(VISIT_COUNT_FILE):
+        return VISIT_COUNT_SEED
+    try:
+        with open(VISIT_COUNT_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return int(data.get("count", VISIT_COUNT_SEED))
+    except Exception:
+        return VISIT_COUNT_SEED
+
+
+def _save_visit_count(count):
+    import json
+    try:
+        with open(VISIT_COUNT_FILE, "w", encoding="utf-8") as f:
+            json.dump({"count": count}, f)
+    except Exception as e:
+        logger.error("Failed to save visit count: %s", e)
+
+
+@app.route("/site-visits", methods=["GET"])
+def site_visits():
+    """Increment and return the total site visit count."""
+    with _visit_lock:
+        count = _get_visit_count() + 1
+        _save_visit_count(count)
+    return jsonify({"count": count})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=settings.debug)
 

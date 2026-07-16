@@ -584,3 +584,52 @@ html[data-theme="dark"] .login-remember span {
 .login-capslock-warn .pi {
 	font-size: 0.8rem;
 }
+
+/* ═══════════════════════════════════════════════
+   Site Visit Counter — Login page (bottom-centre)
+═══════════════════════════════════════════════ */
+.login-visit-counter {
+	position: absolute;
+	bottom: clamp(18px, 3vw, 32px);
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 2;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 18px 7px 14px;
+	border: 1px solid rgba(255, 255, 255, 0.28);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.14);
+	backdrop-filter: blur(14px);
+	color: rgba(255, 255, 255, 0.92);
+	font-size: 0.84rem;
+	font-weight: 700;
+	white-space: nowrap;
+	animation: visitCounterIn 500ms cubic-bezier(0.22, 1, 0.36, 1) 600ms both;
+}
+
+.login-visit-counter i {
+	font-size: 0.88rem;
+	opacity: 0.8;
+}
+
+.login-visit-counter__num {
+	font-size: 1rem;
+	font-weight: 900;
+	letter-spacing: -0.01em;
+	font-variant-numeric: tabular-nums;
+	color: #ffffff;
+}
+
+@keyframes visitCounterIn {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0);
+	}
+}
+

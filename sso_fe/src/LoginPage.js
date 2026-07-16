@@ -24,6 +24,10 @@ function LoginApp() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [capsLock, setCapsLock] = useState(false);
 
+	// Site visit counter
+	const [siteVisits, setSiteVisits] = useState(null);
+	const [displayedVisits, setDisplayedVisits] = useState(null);
+
 	// Password-expiry warning state
 	const [expiryWarning, setExpiryWarning] = useState(null); // { daysRemaining: number }
 	const [expiryChecked, setExpiryChecked] = useState(false);
@@ -47,6 +51,24 @@ function LoginApp() {
 			localStorage.removeItem("token");
 		}
 	}, [navigate]);
+
+	// Fetch site visit count with count-up animation
+	useEffect(() => {
+		axios.get("https://sso.erldc.in:5000/site-visits")
+			.then((res) => {
+				const total = res.data.count;
+				setSiteVisits(total);
+				const start = Math.max(0, total - 60);
+				let current = start;
+				const step = Math.ceil((total - start) / 40);
+				const interval = setInterval(() => {
+					current = Math.min(current + step, total);
+					setDisplayedVisits(current);
+					if (current >= total) clearInterval(interval);
+				}, 28);
+			})
+			.catch(() => {});
+	}, []);
 
 	/** Check password expiry for the just-authenticated user. */
 	const checkPasswordExpiry = useCallback(async (token) => {
@@ -309,6 +331,17 @@ function LoginApp() {
 					</form>
 				</section>
 			</div>
+
+			{/* ── Site Visit Counter (bottom-centre) ── */}
+			{siteVisits !== null && (
+				<div className="login-visit-counter" aria-label="Site visit counter">
+					<i className="pi pi-eye" aria-hidden="true" />
+					<span className="login-visit-counter__num">
+						{(displayedVisits ?? siteVisits).toLocaleString("en-IN")}
+					</span>
+					<span>Site Visits</span>
+				</div>
+			)}
 		</main>
 	);
 }

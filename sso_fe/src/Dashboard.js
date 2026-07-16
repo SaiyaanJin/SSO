@@ -256,6 +256,8 @@ export default function Dashboard() {
 	const [now, setNow] = useState(() => new Date());
 	const [currentUserId, setCurrentUserId] = useState("");
 	const [activeUsers, setActiveUsers] = useState([]);
+	const [siteVisits, setSiteVisits] = useState(null);
+	const [displayedVisits, setDisplayedVisits] = useState(null);
 	const [customApps, setCustomApps] = useState(() => {
 		const saved = localStorage.getItem("sso_custom_apps");
 		return saved ? JSON.parse(saved) : [];
@@ -927,6 +929,25 @@ export default function Dashboard() {
 		return () => window.clearInterval(timerId);
 	}, []);
 
+	// Fetch and increment site visit counter
+	useEffect(() => {
+		axios.get("https://sso.erldc.in:5000/site-visits")
+			.then((res) => {
+				const total = res.data.count;
+				setSiteVisits(total);
+				// Animate count-up from (total - up to 60) to total
+				const start = Math.max(0, total - 60);
+				let current = start;
+				const step = Math.ceil((total - start) / 40);
+				const interval = setInterval(() => {
+					current = Math.min(current + step, total);
+					setDisplayedVisits(current);
+					if (current >= total) clearInterval(interval);
+				}, 28);
+			})
+			.catch(() => {}); // silently ignore if backend unreachable
+	}, []);
+
 	useEffect(() => {
 		if (!sessionExpiresAt || isCheckingSession) {
 			return;
@@ -1088,6 +1109,15 @@ export default function Dashboard() {
 									? `Welcome, ${userName.split(" ")[0]}`
 									: "Welcome to ERLDC Intranet"}
 							</h1>
+							{siteVisits !== null && (
+								<div className="dashboard-visit-counter" aria-label="Site visit counter">
+									<i className="pi pi-eye" aria-hidden="true" />
+									<span className="dashboard-visit-counter__num">
+										{(displayedVisits ?? siteVisits).toLocaleString("en-IN")}
+									</span>
+									<span>Site Visits</span>
+								</div>
+							)}
 							<p className="dashboard-brand__copy">
 								A secure launchpad for control room, metering, analytics, HRD,
 								and stakeholder service applications.
