@@ -2593,6 +2593,80 @@ def site_visits():
     return jsonify({"count": count})
 
 
+# ─────────────────────────────────────────────────────────────────
+#  Attendance Punch-In Time  (user 00162 only)
+# ─────────────────────────────────────────────────────────────────
+_AMS_URL = (
+    "https://ams.posoco.in/ams/emptype.ashx"
+    "?EN=icnzlQz0esVTB97tFfbyhSPJMNaUwGgIS69ss3aQAT3LqixsF%2B5xLioJNYfPhCrQ"
+    "O4eg6SSCOCsg3qmDzseo%2F6uEtE1HNHLFvG1sdhaOy0BF71fzSoGCBd7QpHyOIPoFNaOV"
+    "ryF0lxHQPnvSu5funlVq1z9C7j7QNbh%2FH%2BW6Dlk%3D"
+)
+_PUNCH_CACHE_FILE = os.path.join(DATA_DIR, "attendance_punch_cache.json")
+
+
+def _parse_first_punch(html, target_day):
+    """
+    Scan <td> cells in the AMS calendar HTML.
+    Return the first HH:MM:SS AM/PM time found in the cell whose
+    first text token equals target_day (e.g. 16).
+    """
+    import re as _re
+    # Normalise whitespace so regexes work across line breaks
+    flat = _re.sub(r"\s+", " ", html)
+    time_re = _re.compile(r"\d{1,2}:\d{2}:\d{2}\s*(?:AM|PM)", _re.IGNORECASE)
+    day_str = str(target_day)
+
+    for td in _re.finditer(r"<td\b[^>]*>(.*?)</td>", flat, _re.IGNORECASE | _re.DOTALL):
+        # Strip inner HTML tags → plain text
+        text = _re.sub(r"<[^>]+>", " ", td.group(1))
+        tokens = text.split()
+        if tokens and tokens[0] == day_str:
+            m = time_re.search(text)
+            if m:
+                return m.group().strip()
+    return None
+
+
+@app.route("/attendance-punch", methods=["GET"])
+@require_login_token
+def get_attendance_punch():
+    """Return the raw HTML from AMS."""
+    import urllib.request as _urlreq
+    import ssl as _ssl
+
+    user_id = request.sso_user.get("User")
+    if user_id != "00162":
+        return json_error("Unauthorized", 403)
+
+    #  1. Fetch AMS HTML server-side using requests to handle HTTP -> HTTPS redirect issues
+    try:
+        import requests
+        session = requests.Session()
+        session.verify = False  # bypass ssl check like ctx.verify_mode = CERT_NONE
+        
+        # Initial request
+        ams_url = "https://ams.posoco.in/ams/emptype.ashx?EN=icnzlQz0esVTB97tFfbyhSPJMNaUwGgIS69ss3aQAT3LqixsF+5xLioJNYfPhCrQO4eg6SSCOCsg3qmDzseo/6uEtE1HNHLFvG1sdhaOy0BF71fzSoGCBd7QpHyOIPoFNaOVryF0lxHQPnvSu5funlVq1z9C7j7QNbh/H+W6Dlk="
+        resp1 = session.get(ams_url, headers={"User-Agent": "Mozilla/5.0 (SSO/1.0)"}, allow_redirects=False, timeout=15)
+        
+        if resp1.status_code in (301, 302, 303, 307, 308) and 'Location' in resp1.headers:
+            redirect_url = resp1.headers['Location']
+            # Force HTTPS on the redirect since port 80 is firewalled
+            if redirect_url.startswith("http://"):
+                redirect_url = "https://" + redirect_url[7:]
+            elif redirect_url.startswith("/"):
+                redirect_url = "https://ams.posoco.in" + redirect_url
+                
+            resp2 = session.get(redirect_url, headers={"User-Agent": "Mozilla/5.0 (SSO/1.0)"}, timeout=15)
+            html = resp2.text
+        else:
+            html = resp1.text
+            
+        return html, 200, {'Content-Type': 'text/html'}
+    except Exception as exc:
+        logger.error("AMS proxy fetch failed: %s", exc)
+        return json_error("Could not reach attendance system", 503)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=settings.debug)
 

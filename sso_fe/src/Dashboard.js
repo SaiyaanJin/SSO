@@ -258,6 +258,8 @@ export default function Dashboard() {
 	const [activeUsers, setActiveUsers] = useState([]);
 	const [siteVisits, setSiteVisits] = useState(null);
 	const [displayedVisits, setDisplayedVisits] = useState(null);
+	const [punchInTime, setPunchInTime] = useState(null); // "09:15:40 AM" or "NP" for user 00162
+	const [lcUtilized, setLcUtilized] = useState(0);
 	const [customApps, setCustomApps] = useState(() => {
 		const saved = localStorage.getItem("sso_custom_apps");
 		return saved ? JSON.parse(saved) : [];
@@ -886,7 +888,7 @@ export default function Dashboard() {
 			}
 
 			setUserDepartment(decoded.Department);
-			setUserName(typeof decoded.Name === "string" ? decoded.Name : "");
+			setUserName(typeof decoded.Person_Name === "string" ? decoded.Person_Name : typeof decoded.Name === "string" ? decoded.Name : "");
 			setCurrentUserId(decoded.User || "");
 			setSessionExpiresAt(expiresAt);
 			setIsCheckingSession(false);
@@ -948,6 +950,69 @@ export default function Dashboard() {
 			.catch(() => {}); // silently ignore if backend unreachable
 	}, []);
 
+	// Fetch today's first punch-in time for user 00162 (once per calendar day)
+	useEffect(() => {
+		if (currentUserId !== "00162") return;
+		const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+		try {
+			const cached = localStorage.getItem("sso_punch_00162");
+			if (cached) {
+				const data = JSON.parse(cached);
+				if (data.date === today && data.punch_time && data.punch_time !== "NP" && data.punch_time !== "ERROR") {
+					setPunchInTime(data.punch_time);
+					if (data.lc_utilized !== undefined) setLcUtilized(data.lc_utilized);
+					return;
+				}
+			}
+		} catch { /* ignore parse errors */ }
+		const AMS_URL = `${SSO_API}/attendance-punch`;
+		
+		const token = localStorage.getItem("token");
+		axios.get(AMS_URL, { 
+			responseType: 'text',
+			headers: { Token: token }
+		})
+			.then((res) => {
+				const html = res.data;
+				const todayDay = new Date().getDate().toString();
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(html, "text/html");
+				const cells = doc.querySelectorAll("td");
+				
+				let foundTime = "NP"; // Default to No Punch
+				let maxLc = 0;
+
+				for (const td of cells) {
+					// Convert HTML tags (like <br>) to spaces before replacing whitespace, so "17<br>09:43" becomes "17 09:43" instead of "1709:43"
+					const text = td.innerHTML.replace(/<[^>]+>/g, " ").trim().replace(/\s+/g, " ");
+					
+					// Scan for LC: X
+					const lcMatch = text.match(/LC:\s*(\d+)/i);
+					if (lcMatch) {
+						const val = parseInt(lcMatch[1], 10);
+						if (val > maxLc) maxLc = val;
+					}
+
+					const tokens = text.split(" ");
+					if (tokens[0] === todayDay) {
+						const match = text.match(/\d{1,2}:\d{2}:\d{2}\s*(AM|PM)/i);
+						if (match) {
+							foundTime = match[0];
+						}
+					}
+				}
+				setPunchInTime(foundTime);
+				setLcUtilized(maxLc);
+				if (foundTime !== "NP" && foundTime !== "ERROR") {
+					localStorage.setItem("sso_punch_00162", JSON.stringify({ date: today, punch_time: foundTime, lc_utilized: maxLc }));
+				}
+			})
+			.catch((err) => {
+				console.error("AMS fetch failed:", err);
+				setPunchInTime("ERROR");
+			});
+	}, [currentUserId]);
+
 	useEffect(() => {
 		if (!sessionExpiresAt || isCheckingSession) {
 			return;
@@ -972,6 +1037,34 @@ export default function Dashboard() {
 		() => ["All", ...Array.from(new Set(allApplications.map((app) => app.category)))],
 		[allApplications]
 	);
+
+	// Live 8h30m countdown derived from punch-in time + existing `now` ticker
+	const workCountdown = useMemo(() => {
+		if (!punchInTime || punchInTime === "NP" || punchInTime === "ERROR") return null;
+		// Parse "09:15:40 AM" → total seconds since midnight
+		const match = punchInTime.match(/(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
+		if (!match) return null;
+		let [, h, m, s, mer] = match;
+		h = parseInt(h, 10); m = parseInt(m, 10); s = parseInt(s, 10);
+		if (mer.toUpperCase() === "PM" && h !== 12) h += 12;
+		if (mer.toUpperCase() === "AM" && h === 12) h = 0;
+		// Build punch-in Date using today's date
+		const punchDate = new Date(now);
+		punchDate.setHours(h, m, s, 0);
+		const TARGET = 8 * 3600 + 30 * 60; // 30 600 seconds = 8h30m
+		const elapsed = Math.floor((now.getTime() - punchDate.getTime()) / 1000);
+		const remaining = TARGET - elapsed;
+		if (remaining <= 0) return { done: true, text: "Completed ✓", remaining: 0 };
+		const rh = Math.floor(remaining / 3600);
+		const rm = Math.floor((remaining % 3600) / 60);
+		const rs = remaining % 60;
+		return {
+			done: false,
+			remaining,
+			text: `${String(rh).padStart(2, "0")}:${String(rm).padStart(2, "0")}:${String(rs).padStart(2, "0")}`,
+		};
+	}, [punchInTime, now]);
+
 
 	const filteredApps = useMemo(() => {
 		const normalizedQuery = query.trim().toLowerCase();
@@ -1106,7 +1199,7 @@ export default function Dashboard() {
 							<p className="dashboard-brand__eyebrow">ERLDC, Grid India</p>
 							<h1>
 								{typeof userName === "string" && userName
-									? `Welcome, ${userName.split(" ")[0]}`
+									? `Welcome, ${userName} (${currentUserId})`
 									: "Welcome to ERLDC Intranet"}
 							</h1>
 							{siteVisits !== null && (
@@ -1138,7 +1231,7 @@ export default function Dashboard() {
 					</div>
 				</div>
 
-				<div className="dashboard-overview">
+				<div className={`dashboard-overview ${currentUserId === "00162" ? "dashboard-overview--4cols" : ""}`}>
 					<div>
 						<span>{mappedApplications.length}</span>
 						<p>Applications</p>
@@ -1157,6 +1250,32 @@ export default function Dashboard() {
 						</span>
 						<p>Session remaining</p>
 					</div>
+					{/* ── Attendance punch widget — only for user 00162 ── */}
+					{currentUserId === "00162" && (
+						<div 
+							className="dashboard-overview__session-card dashboard-overview__punch-card"
+							style={{ "--session-progress": `${workCountdown && !workCountdown.done ? Math.max(0, Math.min(100, (workCountdown.remaining / 30600) * 100)) : 0}%` }}
+						>
+							<span 
+								style={{ color: "black" }}
+								className={`dashboard-overview__countdown ${
+									!punchInTime || punchInTime === "NP" || punchInTime === "ERROR" ? "" 
+									: workCountdown?.done ? "dashboard-overview__countdown--done"
+									: workCountdown?.remaining < 1800 ? "dashboard-overview__countdown--soon"
+									: ""
+								}`}
+							>
+								<i className={!punchInTime ? "pi pi-spin pi-spinner" : punchInTime === "ERROR" ? "pi pi-exclamation-triangle" : punchInTime === "NP" ? "pi pi-calendar-times" : workCountdown?.done ? "pi pi-check-circle" : "pi pi-stopwatch"} aria-hidden="true" />
+								{!punchInTime ? "Loading..." : punchInTime === "ERROR" ? "Fetch Failed" : punchInTime === "NP" ? "No Punch" : workCountdown?.text ?? "--:--:--"}
+							</span>
+							<p style={{ marginBottom: "2px" }}>{!punchInTime ? "Fetching punch in" : punchInTime === "ERROR" ? "CORS / Network Error" : punchInTime === "NP" ? "Attendance" : workCountdown?.done ? "8h 30m Completed" : `Left (In at ${punchInTime.split(' ')[0]})`}</p>
+							{punchInTime && punchInTime !== "ERROR" && (
+								<p style={{ fontSize: "0.75rem", opacity: 0.85, marginTop: 0 }}>
+									LC Util: {lcUtilized} | Rem: {Math.max(0, 8 - lcUtilized)}
+								</p>
+							)}
+						</div>
+					)}
 				</div>
 			</section>
 

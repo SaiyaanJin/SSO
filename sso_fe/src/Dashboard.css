@@ -151,7 +151,7 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 .dashboard-hero {
 	position: relative;
 	overflow: hidden;
-	padding: 26px clamp(18px, 3vw, 42px) 42px;
+	padding: 16px clamp(18px, 3vw, 42px) 24px;
 	background:
 		linear-gradient(135deg, rgba(9, 38, 59, 0.97), rgba(0, 111, 103, 0.96) 56%, rgba(184, 83, 35, 0.96)),
 		linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px),
@@ -189,12 +189,12 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 }
 
 .dashboard-brand__logo {
-	width: clamp(56px, 6vw, 76px);
-	height: clamp(56px, 6vw, 76px);
+	width: clamp(48px, 5vw, 64px);
+	height: clamp(48px, 5vw, 64px);
 	object-fit: contain;
 	background: #ffffff;
 	border-radius: 8px;
-	padding: 10px;
+	padding: 8px;
 	box-shadow: 0 18px 42px rgba(4, 14, 26, 0.28);
 }
 
@@ -209,7 +209,7 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 
 .dashboard-brand h1 {
 	margin: 0;
-	font-size: clamp(1.7rem, 3vw, 3.05rem);
+	font-size: clamp(1.4rem, 2.5vw, 2.25rem);
 	font-weight: 800;
 	letter-spacing: 0;
 	line-height: 1.06;
@@ -217,10 +217,10 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 
 .dashboard-brand__copy {
 	max-width: 760px;
-	margin: 8px 0 0;
+	margin: 6px 0 0;
 	color: rgba(255, 255, 255, 0.78);
-	font-size: clamp(0.94rem, 1.5vw, 1.05rem);
-	line-height: 1.45;
+	font-size: 0.9rem;
+	line-height: 1.4;
 }
 
 .dashboard-session {
@@ -228,9 +228,9 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 	align-items: center;
 	justify-content: flex-end;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: 10px;
 	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.92rem;
+	font-size: 0.85rem;
 }
 
 .dashboard-session__countdown,
@@ -238,9 +238,9 @@ html[data-theme="dark"] .dashboard-nav .dashboard-logout--nav.p-button:enabled:h
 .dashboard-session__pill {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	min-height: 38px;
-	padding: 0 14px;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 12px;
 	border: 1px solid rgba(34, 197, 94, 0.46);
 	border-radius: 8px;
 	background: rgba(22, 163, 74, 0.18);
@@ -338,16 +338,16 @@ html[data-theme="dark"] .dashboard-session__clock {
 	z-index: 1;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 12px;
-	max-width: 620px;
-	margin: 22px 0 0 auto;
+	gap: 10px;
+	max-width: 580px;
+	margin: 16px 0 0 auto;
 }
 
 .dashboard-overview div {
 	position: relative;
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: 8px;
-	padding: 11px 14px;
+	padding: 8px 12px;
 	background: rgba(255, 255, 255, 0.12);
 	backdrop-filter: blur(14px);
 	animation: fadeUp 540ms ease both;
@@ -400,7 +400,7 @@ html[data-theme="dark"] .dashboard-session__clock {
 
 .dashboard-overview span {
 	display: block;
-	font-size: clamp(1.25rem, 2vw, 1.75rem);
+	font-size: clamp(1.05rem, 1.6vw, 1.4rem);
 	font-weight: 850;
 	line-height: 1;
 }
@@ -419,9 +419,9 @@ html[data-theme="dark"] .dashboard-session__clock {
 }
 
 .dashboard-overview p {
-	margin: 5px 0 0;
+	margin: 4px 0 0;
 	color: rgba(255, 255, 255, 0.74);
-	font-size: 0.84rem;
+	font-size: 0.75rem;
 }
 
 .dashboard-workspace {
@@ -2239,3 +2239,81 @@ html[data-theme="dark"] .dashboard-visit-counter {
 	letter-spacing: -0.01em;
 	font-variant-numeric: tabular-nums;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Attendance Punch-In Widget (overview section)
+═══════════════════════════════════════════════════════ */
+
+/* Update grid layout when the 4th card (punch-in) is present */
+.dashboard-overview.dashboard-overview--4cols {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	max-width: 820px;
+}
+
+.dashboard-overview__punch-card {
+	/* Reuse the same session-card background styles */
+}
+
+.dashboard-overview__punch-card::before {
+	background: conic-gradient(
+		from 0deg,
+		#0f766e 0,
+		#0f766e var(--session-progress, 100%),
+		rgba(255, 255, 255, 0.18) 0
+	);
+}
+
+html[data-theme="dark"] .dashboard-overview__punch-card::before {
+	background: conic-gradient(
+		from 0deg,
+		#2dd4bf 0,
+		#2dd4bf var(--session-progress, 100%),
+		rgba(148, 163, 184, 0.2) 0
+	);
+}
+
+.dashboard-overview__punch-card::after {
+	background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), transparent 56%);
+}
+
+html[data-theme="dark"] .dashboard-overview__punch-card::after {
+	background: linear-gradient(135deg, rgba(45, 212, 191, 0.06), transparent 56%);
+}
+
+.dashboard-overview__punch-card .dashboard-overview__countdown {
+	color: #0f766e;
+}
+
+html[data-theme="dark"] .dashboard-overview__punch-card .dashboard-overview__countdown {
+	color: #2dd4bf;
+}
+
+.dashboard-overview__punch-card .dashboard-overview__countdown i {
+	color: inherit;
+	opacity: 0.8;
+}
+
+/* Amber when < 30 min remain */
+.dashboard-overview__countdown--soon {
+	color: #b45309 !important;
+	animation: punchPulse 1.4s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .dashboard-overview__countdown--soon {
+	color: #fbbf24 !important;
+}
+
+/* Green when done */
+.dashboard-overview__countdown--done {
+	color: #15803d !important;
+}
+
+html[data-theme="dark"] .dashboard-overview__countdown--done {
+	color: #4ade80 !important;
+}
+
+@keyframes punchPulse {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.62; }
+}
+
