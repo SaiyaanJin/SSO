@@ -96,7 +96,7 @@ function LoginApp() {
 		setPendingToken(null);
 
 		const trimmedUser = user.trim();
-		if (!/^\d+$/.test(trimmedUser)) {
+		if (!/^(?:\d+|RTSD)$/i.test(trimmedUser)) {
 			setErrorMessage(
 				"You are not authorized to use this SSO portal. " +
 				"Please contact the IT Department."

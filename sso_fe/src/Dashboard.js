@@ -1038,7 +1038,7 @@ export default function Dashboard() {
 		[allApplications]
 	);
 
-	// Live 8h30m countdown derived from punch-in time + existing `now` ticker
+	// Live 8h34m countdown derived from punch-in time + existing `now` ticker
 	const workCountdown = useMemo(() => {
 		if (!punchInTime || punchInTime === "NP" || punchInTime === "ERROR") return null;
 		// Parse "09:15:40 AM" → total seconds since midnight
@@ -1051,7 +1051,7 @@ export default function Dashboard() {
 		// Build punch-in Date using today's date
 		const punchDate = new Date(now);
 		punchDate.setHours(h, m, s, 0);
-		const TARGET = 8 * 3600 + 30 * 60; // 30 600 seconds = 8h30m
+		const TARGET = 8 * 3600 + 34 * 60; // 30840 seconds = 8h34m
 		const elapsed = Math.floor((now.getTime() - punchDate.getTime()) / 1000);
 		const remaining = TARGET - elapsed;
 		if (remaining <= 0) return { done: true, text: "Completed ✓", remaining: 0 };
@@ -1254,7 +1254,7 @@ export default function Dashboard() {
 					{currentUserId === "00162" && (
 						<div 
 							className="dashboard-overview__session-card dashboard-overview__punch-card"
-							style={{ "--session-progress": `${workCountdown && !workCountdown.done ? Math.max(0, Math.min(100, (workCountdown.remaining / 30600) * 100)) : 0}%` }}
+							style={{ "--session-progress": `${workCountdown && !workCountdown.done ? Math.max(0, Math.min(100, (workCountdown.remaining / 30840) * 100)) : 0}%` }}
 						>
 							<span 
 								style={{ color: "black" }}
@@ -1268,7 +1268,7 @@ export default function Dashboard() {
 								<i className={!punchInTime ? "pi pi-spin pi-spinner" : punchInTime === "ERROR" ? "pi pi-exclamation-triangle" : punchInTime === "NP" ? "pi pi-calendar-times" : workCountdown?.done ? "pi pi-check-circle" : "pi pi-stopwatch"} aria-hidden="true" />
 								{!punchInTime ? "Loading..." : punchInTime === "ERROR" ? "Fetch Failed" : punchInTime === "NP" ? "No Punch" : workCountdown?.text ?? "--:--:--"}
 							</span>
-							<p style={{ marginBottom: "2px" }}>{!punchInTime ? "Fetching punch in" : punchInTime === "ERROR" ? "CORS / Network Error" : punchInTime === "NP" ? "Attendance" : workCountdown?.done ? "8h 30m Completed" : `Left (In at ${punchInTime.split(' ')[0]})`}</p>
+							<p style={{ marginBottom: "2px" }}>{!punchInTime ? "Fetching punch in" : punchInTime === "ERROR" ? "CORS / Network Error" : punchInTime === "NP" ? "Attendance" : workCountdown?.done ? "8h 34m Completed" : `Left (In at ${punchInTime.split(' ')[0]})`}</p>
 							{punchInTime && punchInTime !== "ERROR" && (
 								<p style={{ fontSize: "0.75rem", opacity: 0.85, marginTop: 0 }}>
 									LC Util: {lcUtilized} | Rem: {Math.max(0, 8 - lcUtilized)}
