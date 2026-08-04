@@ -960,7 +960,14 @@ export default function Dashboard() {
 				const data = JSON.parse(cached);
 				if (data.date === today && data.punch_time && data.punch_time !== "NP" && data.punch_time !== "ERROR") {
 					setPunchInTime(data.punch_time);
-					if (data.lc_utilized !== undefined) setLcUtilized(data.lc_utilized);
+					if (data.lc_utilized !== undefined && Number(data.punch_time.split(':')[0])>8 && Number(data.punch_time.split(':')[1])>29) 
+					{
+						setLcUtilized(Number(data.lc_utilized)+1);
+					}
+					else if (data.lc_utilized !== undefined ) 
+					{
+						setLcUtilized(Number(data.lc_utilized));
+					}
 					return;
 				}
 			}
@@ -1002,10 +1009,25 @@ export default function Dashboard() {
 					}
 				}
 				setPunchInTime(foundTime);
-				setLcUtilized(maxLc);
+				// If in-time is after 09:30, today counts as an LC (not yet reflected in AMS until logout)
+				let displayLc = maxLc;
 				if (foundTime !== "NP" && foundTime !== "ERROR") {
+					const timeMatch = foundTime.match(/(\d{1,2}):(\d{2}):\d{2}\s*(AM|PM)/i);
+					if (timeMatch) {
+						let fh = parseInt(timeMatch[1], 10);
+						const fm = parseInt(timeMatch[2], 10);
+						const fmer = timeMatch[3].toUpperCase();
+						if (fmer === "PM" && fh !== 12) fh += 12;
+						if (fmer === "AM" && fh === 12) fh = 0;
+						// After 09:30 → pending LC for today
+						if (fh > 9 || (fh === 9 && fm >= 30)) {
+							displayLc = maxLc + 1;
+						}
+					}
+					// Persist raw maxLc so the cached-path +1 logic stays consistent on reload
 					localStorage.setItem("sso_punch_00162", JSON.stringify({ date: today, punch_time: foundTime, lc_utilized: maxLc }));
 				}
+				setLcUtilized(displayLc);
 			})
 			.catch((err) => {
 				console.error("AMS fetch failed:", err);
